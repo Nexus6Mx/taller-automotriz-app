@@ -19,83 +19,112 @@ const pool = new Pool({
   }
 });
 
-// --- RUTAS PÚBLICAS ---
+// --- RUTAS DE AUTENTICACIÓN Y USUARIOS ---
+app.post('/api/users/register', async (req, res) => {
+    // ... (código de registro existente)
+});
+
 app.post('/api/auth/login', async (req, res) => {
-    const { email, password } = req.body;
-    let client;
-    try {
-        client = await pool.connect();
-        const userResult = await client.query('SELECT * FROM users WHERE email = $1', [email]);
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ message: 'Credenciales inválidas' });
-        }
-        const user = userResult.rows[0];
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Credenciales inválidas' });
-        }
-        const payload = { userId: user.id, roleId: user.role_id, name: user.name };
-        const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '8h' });
-        res.json({ 
-            message: `Bienvenido de vuelta, ${user.name}!`,
-            token: token,
-            user: { id: user.id, name: user.name, email: user.email }
-        });
-    } catch (error) {
-        console.error('Error en el login:', error);
-        res.status(500).json({ message: 'Error en el servidor' });
-    } finally {
-        if (client) client.release();
-    }
+    // ... (código de login existente)
 });
 
-// --- RUTAS PROTEGIDAS ---
-
-// Ruta de prueba
-app.get('/api/test-protegido', authMiddleware, (req, res) => {
-    res.json({ 
-      message: `¡Hola, ${req.user.name}! Has accedido a una ruta protegida.`,
-      userData: req.user 
-    });
-});
-
-// --- NUEVO: RUTAS PARA CLIENTES ---
-
-// OBTENER TODOS LOS CLIENTES
+// --- RUTAS DE CLIENTES ---
 app.get('/api/clients', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.post('/api/clients', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.put('/api/clients/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.delete('/api/clients/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.get('/api/clients/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+
+// --- RUTAS DE VEHÍCULOS ---
+app.get('/api/clients/:clientId/vehicles', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.post('/api/clients/:clientId/vehicles', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.put('/api/vehicles/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.delete('/api/vehicles/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+
+// --- RUTAS DE CATÁLOGO ---
+app.get('/api/catalog-items', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.post('/api/catalog-items', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.put('/api/catalog-items/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+app.delete('/api/catalog-items/:id', authMiddleware, async (req, res) => {
+    // ... (código existente)
+});
+
+// --- NUEVO: RUTAS DE ÓRDENES DE SERVICIO ---
+// GET: Obtener todas las órdenes de servicio
+app.get('/api/service-orders', authMiddleware, async (req, res) => {
     let client;
     try {
         client = await pool.connect();
-        const result = await client.query('SELECT * FROM clients ORDER BY name');
+        // Unimos tablas para obtener nombres en lugar de solo IDs
+        const query = `
+            SELECT 
+                so.id, so.folio, so.status, so.created_at,
+                c.name as client_name,
+                v.brand, v.model, v.license_plate
+            FROM service_orders so
+            JOIN clients c ON so.client_id = c.id
+            JOIN vehicles v ON so.vehicle_id = v.id
+            ORDER BY so.created_at DESC;
+        `;
+        const result = await client.query(query);
         res.json(result.rows);
     } catch (error) {
-        console.error('Error al obtener clientes:', error);
+        console.error('Error al obtener órdenes de servicio:', error);
         res.status(500).json({ message: 'Error en el servidor' });
     } finally {
         if (client) client.release();
     }
 });
 
-// CREAR UN NUEVO CLIENTE
-app.post('/api/clients', authMiddleware, async (req, res) => {
-    // Solo tomamos los campos del formulario de contacto por ahora
-    const { name, phone, email } = req.body; 
-    let dbClient;
+// POST: Crear una nueva orden de servicio (versión inicial)
+app.post('/api/service-orders', authMiddleware, async (req, res) => {
+    const { client_id, vehicle_id, customer_reported_fault } = req.body;
+    if (!client_id || !vehicle_id || !customer_reported_fault) {
+        return res.status(400).json({ message: 'Cliente, vehículo y falla reportada son requeridos.' });
+    }
+
+    let client;
     try {
-        dbClient = await pool.connect();
+        client = await pool.connect();
+        // Generar un folio único (ej. OS-timestamp)
+        const folio = `OS-${Date.now()}`;
         const query = `
-            INSERT INTO clients (name, phone, email)
-            VALUES ($1, $2, $3)
+            INSERT INTO service_orders (folio, client_id, vehicle_id, customer_reported_fault, status)
+            VALUES ($1, $2, $3, $4, 'Recibido')
             RETURNING *;
         `;
-        const values = [name, phone, email];
-        const result = await dbClient.query(query, values);
+        const values = [folio, client_id, vehicle_id, customer_reported_fault];
+        const result = await client.query(query, values);
         res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error('Error al crear cliente:', error);
+        console.error('Error al crear orden de servicio:', error);
         res.status(500).json({ message: 'Error en el servidor' });
     } finally {
-        if (dbClient) dbClient.release();
+        if (client) client.release();
     }
 });
 
