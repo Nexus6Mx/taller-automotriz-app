@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Órdenes de Servicio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-btn.active { border-bottom-color: #3b82f6; color: #3b82f6; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .status-connected { background-color: #22c55e; }
+        .status-disconnected { background-color: #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <header class="bg-white shadow-md rounded-lg p-6 mb-8">
+            <div class="flex justify-between items-center flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <img id="header-logo" src="https://errautomotriz.com/assets/images/err.gif" alt="Logo" class="h-16">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Gestor de Órdenes de Servicio</h1>
+                        <p class="text-gray-600 mt-1">MVP v3.2 - Conectado a Servidor MySQL/PHP.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div id="connection-status" class="text-sm font-medium flex items-center">
+                        <span class="status-dot status-disconnected"></span>
+                        <span>Conectando...</span>
+                    </div>
+                     <div id="user-info" class="text-sm font-medium">
+                        <span id="user-email" class="text-gray-600 font-semibold"></span>
+                        <button id="logout-btn" class="ml-4 text-red-500 hover:text-red-700 font-bold focus:outline-none">Cerrar Sesión</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Pestañas de Navegación -->
+        <div class="mb-6 bg-white rounded-lg shadow-sm">
+            <nav class="flex border-b border-gray-200">
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent active" data-tab="dashboard">Dashboard</button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="nueva-orden">Nueva Orden</button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="historial">Historial de Órdenes</button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="catalogos">Catálogos</button>
+            </nav>
+        </div>
+
+        <!-- Contenido de las Pestañas -->
+        <main>
+            <!-- Sección: Dashboard -->
+             <div id="dashboard" class="tab-content active">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Total Ingresado</h3>
+                        <p id="kpi-total-revenue" class="mt-1 text-4xl font-bold text-green-600">$0.00</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Ticket Promedio</h3>
+                        <p id="kpi-avg-ticket" class="mt-1 text-4xl font-bold text-blue-600">$0.00</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Total de Órdenes</h3>
+                        <p id="kpi-total-orders" class="mt-1 text-4xl font-bold text-indigo-600">0</p>
+                    </div>
+                </div>
+                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes por Estado</h3>
+                        <canvas id="status-chart"></canvas>
+                    </div>
+                    <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Ingresos por Mes (Último año)</h3>
+                        <canvas id="revenue-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Nueva Orden -->
+            <div id="nueva-orden" class="tab-content">
+                <form id="order-form" class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-6">
+                         <h2 id="form-mode-title" class="text-2xl font-bold text-gray-800">Crear Nueva Orden</h2>
+                         <div>
+                            <label for="order-numeric-id" class="block text-sm font-medium text-gray-600">No. de Orden</label>
+                            <input type="number" id="order-numeric-id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-lg p-2 font-bold" required>
+                         </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="border border-gray-200 p-4 rounded-md">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-700">1. Datos del Cliente</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="client-name" class="block text-sm font-medium text-gray-600">Nombre</label>
+                                    <input type="text" id="client-name" list="clients-datalist" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                                </div>
+                                <div>
+                                    <label for="client-cel" class="block text-sm font-medium text-gray-600">Teléfono</label>
+                                    <input type="tel" id="client-cel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label for="client-address" class="block text-sm font-medium text-gray-600">Dirección</label>
+                                    <input type="text" id="client-address" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="client-rfc" class="block text-sm font-medium text-gray-600">RFC</label>
+                                    <input type="text" id="client-rfc" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="client-email" class="block text-sm font-medium text-gray-600">Email</label>
+                                    <input type="email" id="client-email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border border-gray-200 p-4 rounded-md">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-700">2. Datos del Vehículo</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="vehicle-brand" class="block text-sm font-medium text-gray-600">Marca/Modelo</label>
+                                    <input type="text" id="vehicle-brand" list="vehicles-datalist" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                                </div>
+                                <div>
+                                    <label for="vehicle-plates" class="block text-sm font-medium text-gray-600">Placas</label>
+                                    <input type="text" id="vehicle-plates" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="vehicle-year" class="block text-sm font-medium text-gray-600">Año</label>
+                                    <input type="number" id="vehicle-year" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="vehicle-km" class="block text-sm font-medium text-gray-600">Kilometraje</label>
+                                    <input type="number" id="vehicle-km" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label for="vehicle-gas-level" class="block text-sm font-medium text-gray-600">Medidor Gas:</label>
+                                    <select id="vehicle-gas-level" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                        <option value="Vacío">Vacío</option>
+                                        <option value="1/4">1/4</option>
+                                        <option value="1/2">1/2</option>
+                                        <option value="3/4">3/4</option>
+                                        <option value="Lleno">Lleno</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-6 border border-gray-200 p-4 rounded-md">
+                         <h3 class="text-lg font-semibold mb-4 text-gray-700">3. Conceptos (Refacciones y Mano de Obra)</h3>
+                        <div id="items-container"></div>
+                        <button type="button" id="add-item-btn" class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Agregar Concepto</button>
+                    </div>
+                    <div class="mt-6 border border-gray-200 p-4 rounded-md">
+                        <h3 class="text-lg font-semibold mb-2 text-gray-700">4. Observaciones</h3>
+                        <textarea id="order-observations" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" rows="3" placeholder="Anotaciones sobre el servicio..."></textarea>
+                    </div>
+                    <div class="mt-6 flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div>
+                            <label for="order-status" class="block text-sm font-medium text-gray-700">5. Estado de la Orden</label>
+                            <select id="order-status" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                <option>Recibido</option>
+                                <option>Diagnostico</option>
+                                <option>En reparación</option>
+                                <option>Preparacion para entrega</option>
+                                <option>Entregado pendiente de pago</option>
+                                <option>En Facturación</option>
+                                <option>Facturado</option>
+                                <option>Entregado Pagado</option>
+                            </select>
+                        </div>
+                        <div class="w-full md:w-auto flex flex-col items-end">
+                            <div class="w-full max-w-sm space-y-2">
+                                <div class="flex justify-end items-center gap-3 pr-2">
+                                    <label for="calculate-iva" class="text-sm font-medium text-gray-700">Calcular IVA (16%)</label>
+                                    <input type="checkbox" id="calculate-iva" class="h-4 w-4 rounded border-gray-300 text-blue-600">
+                                </div>
+                                <div class="text-right border-t pt-2">
+                                    <div class="flex justify-between font-medium"><span>Subtotal:</span><span id="subtotal-display">$0.00</span></div>
+                                    <div class="flex justify-between font-medium"><span>IVA:</span><span id="iva-display">$0.00</span></div>
+                                    <div class="flex justify-between font-bold text-xl text-gray-900 border-t pt-2 mt-2"><span>Total:</span><span id="total-display">$0.00</span></div>
+                                </div>
+                            </div>
+                            <div class="mt-6 flex items-center space-x-4">
+                                <button type="button" id="cancel-edit-btn" class="hidden justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
+                                <button type="submit" id="submit-btn" class="justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">Guardar Orden</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Sección: Catálogos -->
+            <div id="catalogos" class="tab-content">
+                <div class="space-y-8">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogo de Clientes</h2>
+                            <input type="text" id="client-search" placeholder="Buscar por nombre o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Nombre</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Teléfono</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Email</th>
+                        </tr></thead><tbody id="clients-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogo de Vehículos</h2>
+                            <input type="text" id="vehicle-search" placeholder="Buscar por cliente, marca, placas o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Cliente</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Marca/Modelo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Placas</th>
+                        </tr></thead><tbody id="vehicles-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogo de Insumos</h2>
+                            <input type="text" id="supply-search" placeholder="Buscar por descripción o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Descripción</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Precio Unitario</th>
+                        </tr></thead><tbody id="supplies-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Historial -->
+            <div id="historial" class="tab-content">
+                 <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                        <h2 class="text-xl font-bold">Historial de Órdenes</h2>
+                         <input type="text" id="order-search" placeholder="Buscar por cliente, vehículo, placas..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        <button id="export-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Exportar a CSV</button>
+                    </div>
+                    <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">#</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Estado</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Cliente</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Vehículo</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Total</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Acciones</th>
+                    </tr></thead><tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <datalist id="clients-datalist"></datalist>
+    <datalist id="vehicles-datalist"></datalist>
+    <datalist id="supplies-datalist"></datalist>
+
+    <script src="/assets/js/app.js?v=1.4"></script>
+    <script>
+        // Este script se carga después de app.js y extiende sus funcionalidades.
+        // Se asegura de que la aplicación esté completamente cargada antes de ejecutarse.
+        
+        // Variables globales y de UI
+        let localData = { orders: [], clients: [], supplies: [], vehicles: [] };
+        let currentEditId = null;
+        let chartStatus = null;
+        let chartRevenue = null;
+
+        const ui = {
+            tabs: document.querySelectorAll('.tab-btn'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            orderForm: document.getElementById('order-form'),
+            itemsContainer: document.getElementById('items-container'),
+            addItemBtn: document.getElementById('add-item-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            cancelEditBtn: document.getElementById('cancel-edit-btn'),
+            formModeTitle: document.getElementById('form-mode-title'),
+            submitBtn: document.getElementById('submit-btn'),
+            ivaCheckbox: document.getElementById('calculate-iva'),
+            connectionStatus: document.getElementById('connection-status'),
+            clientNameInput: document.getElementById('client-name'),
+            vehicleBrandInput: document.getElementById('vehicle-brand'),
+            clientSearch: document.getElementById('client-search'),
+            vehicleSearch: document.getElementById('vehicle-search'),
+            supplySearch: document.getElementById('supply-search'),
+            orderSearch: document.getElementById('order-search'),
+            orderNumericIdInput: document.getElementById('order-numeric-id'),
+            ordersTable: document.getElementById('orders-table'),
+            logoutBtn: document.getElementById('logout-btn'),
+            userEmail: document.getElementById('user-email')
+        };
+
+        const statusConfig = {
+            'Recibido': { color: 'rgba(59, 130, 246, 0.7)', class: 'bg-blue-200 text-blue-800' },
+            'Diagnostico': { color: 'rgba(139, 92, 246, 0.7)', class: 'bg-purple-200 text-purple-800' },
+            'En reparación': { color: 'rgba(234, 179, 8, 0.7)', class: 'bg-yellow-200 text-yellow-800' },
+            'Preparacion para entrega': { color: 'rgba(6, 182, 212, 0.7)', class: 'bg-cyan-200 text-cyan-800' },
+            'Entregado pendiente de pago': { color: 'rgba(239, 68, 68, 0.7)', class: 'bg-red-200 text-red-800' },
+            'En Facturación': { color: 'rgba(99, 102, 241, 0.7)', class: 'bg-indigo-200 text-indigo-800' },
+            'Facturado': { color: 'rgba(20, 184, 166, 0.7)', class: 'bg-teal-200 text-teal-800' },
+            'Entregado Pagado': { color: 'rgba(34, 197, 94, 0.7)', class: 'bg-green-200 text-green-800' }
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('authToken')) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            ui.userEmail.textContent = localStorage.getItem('userEmail');
+            ui.logoutBtn.addEventListener('click', () => window.apiService.logout());
+
+            // --- Carga inicial de datos ---
+            await loadData();
+
+            // --- Lógica de Pestañas ---
+            ui.tabs.forEach(tab => {
+                tab.addEventListener('click', e => {
+                    const tabId = e.target.dataset.tab;
+                    ui.tabs.forEach(t => t.classList.remove('active'));
+                    e.target.classList.add('active');
+                    ui.tabContents.forEach(tc => tc.classList.remove('active'));
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+            
+            // --- Lógica del formulario ---
+            setupFormListeners();
+            resetForm();
+        });
+
+        async function loadData() {
+            try {
+                updateConnectionStatus(false, 'Cargando datos...');
+                const [ordersData, clientsData, suppliesData, vehiclesData] = await Promise.all([
+                    window.apiService.getOrders(),
+                    window.apiService.getClients(),
+                    window.apiService.getSupplies(),
+                    window.apiService.getVehicles()
+                ]);
+                localData.orders = ordersData.data || [];
+                localData.clients = clientsData.data || [];
+                localData.supplies = suppliesData.data || [];
+                localData.vehicles = vehiclesData.data || [];
+                
+                updateConnectionStatus(true, 'Conectado al servidor');
+                renderAll();
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+                updateConnectionStatus(false, 'Error de conexión');
+            }
+        }
+
+        function updateConnectionStatus(connected, text) {
+            const dot = ui.connectionStatus.querySelector('.status-dot');
+            const statusText = ui.connectionStatus.querySelector('span:last-child');
+            if (connected) {
+                dot.className = 'status-dot status-connected';
+                statusText.textContent = text || 'Conectado';
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.classList.replace('bg-gray-400', 'bg-green-600');
+            } else {
+                dot.className = 'status-dot status-disconnected';
+                statusText.textContent = text || 'Desconectado';
+                ui.submitBtn.disabled = true;
+                ui.submitBtn.classList.replace('bg-green-600', 'bg-gray-400');
+            }
+        }
+
+        function renderAll() {
+            renderOrdersTable(ui.orderSearch.value);
+            renderClientsTable(ui.clientSearch.value);
+            renderVehiclesTable(ui.vehicleSearch.value);
+            renderSuppliesTable(ui.supplySearch.value);
+            updateDashboard();
+            updateClientsDatalist();
+            updateSuppliesDatalist();
+        }
+
+        // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
+        
+        function renderOrdersTable(filter = '') {
+            const filteredOrders = localData.orders.filter(o => 
+                `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase().includes(filter.toLowerCase())
+            );
+            ui.ordersTable.innerHTML = filteredOrders.map(o => {
+                const statusInfo = statusConfig[o.status] || { class: 'bg-gray-200 text-gray-800' };
+                const dateString = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A';
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${o.numericId}</td>
+                    <td class="px-6 py-4">
+                        <select data-order-id="${o.id}" class="status-selector text-xs p-1 rounded-full border-none ${statusInfo.class}">
+                            ${Object.keys(statusConfig).map(s => `<option value="${s}" ${o.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-6 py-4">${dateString}</td>
+                    <td class="px-6 py-4">${o.client.name}</td>
+                    <td class="px-6 py-4">${o.vehicle.brand} ${o.vehicle.plates}</td>
+                    <td class="px-6 py-4 font-semibold">$${Number(o.total).toFixed(2)}</td>
+                    <td class="px-6 py-4 space-x-2">
+                        <button onclick="window.app.editOrder('${o.id}')" class="text-indigo-600 hover:text-indigo-900">Editar</button>
+                        <button onclick="window.app.printOrder('${o.id}')" class="text-blue-600 hover:text-blue-900">Imprimir</button>
+                        <button onclick="window.app.deleteOrder('${o.id}', ${o.numericId})" class="text-red-600 hover:text-red-900">Eliminar</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderClientsTable(filter = '') {
+            const f = filter.toLowerCase();
+            const filtered = localData.clients.filter(c => c.name.toLowerCase().includes(f) || c.numeric_id.toString().includes(f));
+            document.getElementById('clients-table').innerHTML = filtered.map(c => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${c.numeric_id}</td>
+                    <td class="px-6 py-4">${c.name}</td>
+                    <td class="px-6 py-4">${c.cel || ''}</td>
+                    <td class="px-6 py-4">${c.email || ''}</td>
+                </tr>`).join('');
+        }
+
+        function renderVehiclesTable(filter = '') {
+            const f = filter.toLowerCase();
+            const filtered = localData.vehicles.filter(v => `${v.client_name} ${v.brand} ${v.plates}`.toLowerCase().includes(f) || v.numeric_id.toString().includes(f));
+            document.getElementById('vehicles-table').innerHTML = filtered.map(v => `
+                 <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${v.numeric_id}</td>
+                    <td class="px-6 py-4">${v.client_name}</td>
+                    <td class="px-6 py-4">${v.brand}</td>
+                    <td class="px-6 py-4">${v.plates}</td>
+                 </tr>`).join('');
+        }
+
+        function renderSuppliesTable(filter = '') {
+            const f = filter.toLowerCase();
+            const filtered = localData.supplies.filter(s => s.description.toLowerCase().includes(f) || s.numeric_id.toString().includes(f));
+            document.getElementById('supplies-table').innerHTML = filtered.map(s => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${s.numeric_id}</td>
+                    <td class="px-6 py-4">${s.description}</td>
+                    <td class="px-6 py-4">$${Number(s.price).toFixed(2)}</td>
+                </tr>`).join('');
+        }
+
+        // --- FUNCIONES DE DASHBOARD ---
+        
+        function updateDashboard() {
+            const orders = localData.orders;
+            const totalOrders = orders.length;
+            const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
+            const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+            document.getElementById('kpi-total-revenue').textContent = `$${totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('kpi-avg-ticket').textContent = `$${avgTicket.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('kpi-total-orders').textContent = totalOrders;
+            updateStatusChart(orders);
+            updateRevenueChart(orders);
+        }
+
+        function updateStatusChart(orders) {
+            const statusCounts = orders.reduce((acc, order) => {
+                acc[order.status] = (acc[order.status] || 0) + 1;
+                return acc;
+            }, {});
+            const labels = Object.keys(statusCounts);
+            const data = Object.values(statusCounts);
+            const backgroundColors = labels.map(label => statusConfig[label]?.color || 'rgba(156, 163, 175, 0.7)');
+            if (chartStatus) chartStatus.destroy();
+            chartStatus = new Chart(document.getElementById('status-chart'), {
+                type: 'doughnut',
+                data: { labels, datasets: [{ label: 'Órdenes', data, backgroundColor: backgroundColors, borderWidth: 1 }] },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        }
+
+        function updateRevenueChart(orders) {
+            const monthlyRevenue = {};
+            const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+            const today = new Date();
+            for (let i = 11; i >= 0; i--) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+                const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                monthlyRevenue[key] = { label: label, total: 0 };
+            }
+            orders.forEach(order => {
+                if (!order.createdAt) return;
+                const orderDate = new Date(order.createdAt);
+                const key = `${orderDate.getFullYear()}-${String(orderDate.getMonth()).padStart(2, '0')}`;
+                if (monthlyRevenue[key]) monthlyRevenue[key].total += Number(order.total);
+            });
+            const labels = Object.values(monthlyRevenue).map(m => m.label);
+            const data = Object.values(monthlyRevenue).map(m => m.total);
+            if (chartRevenue) chartRevenue.destroy();
+            chartRevenue = new Chart(document.getElementById('revenue-chart'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Ingresos Mensuales', data, backgroundColor: 'rgba(59, 130, 246, 0.7)' }] },
+                options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: true }
+            });
+        }
+
+        // --- LÓGICA DE AUTOCOMPLETADO (DATALISTS) ---
+        
+        function updateClientsDatalist() {
+            document.getElementById('clients-datalist').innerHTML = localData.clients.map(c => `<option value="${c.name}"></option>`).join('');
+        }
+
+        function updateSuppliesDatalist() {
+            document.getElementById('supplies-datalist').innerHTML = localData.supplies.map(s => `<option value="${s.description}"></option>`).join('');
+        }
+        
+        function updateVehiclesDatalist(clientName) {
+            const clientVehicles = localData.vehicles.filter(v => v.client_name === clientName);
+            document.getElementById('vehicles-datalist').innerHTML = clientVehicles.map(v => `<option value="${v.brand}" data-plates="${v.plates}"></option>`).join('');
+        }
+
+        // --- LÓGICA DEL FORMULARIO ---
+        
+        function setupFormListeners() {
+            ui.addItemBtn.addEventListener('click', () => createItemRow());
+            ui.cancelEditBtn.addEventListener('click', resetForm);
+            ui.ivaCheckbox.addEventListener('change', updateTotals);
+            
+            ui.itemsContainer.addEventListener('click', e => {
+                if (e.target.closest('.remove-item-btn')) {
+                    e.target.closest('.item-row').remove();
+                    updateTotals();
+                }
+            });
+
+            ui.itemsContainer.addEventListener('input', e => {
+                updateTotals();
+                if (e.target.classList.contains('item-desc')) {
+                    const supply = localData.supplies.find(s => s.description.toLowerCase() === e.target.value.toLowerCase());
+                    if (supply) e.target.closest('.item-row').querySelector('.item-price').value = supply.price;
+                }
+            });
+
+            ui.clientNameInput.addEventListener('input', e => {
+                const client = localData.clients.find(c => c.name === e.target.value);
+                if(client){
+                    Object.entries(client).forEach(([key, value]) => {
+                        const input = document.getElementById(`client-${key.toLowerCase()}`);
+                        if(input && key !== 'name') input.value = value;
+                    });
+                    updateVehiclesDatalist(client.name);
+                }
+            });
+
+            ui.vehicleBrandInput.addEventListener('input', e => {
+                const clientName = ui.clientNameInput.value;
+                if(!clientName) return;
+                const vehicle = localData.vehicles.find(v => v.client_name === clientName && v.brand === e.target.value);
+                if(vehicle){
+                    Object.entries(vehicle).forEach(([key, value]) => {
+                        const input = document.getElementById(`vehicle-${key.toLowerCase()}`);
+                        if(input && key !== 'brand') input.value = value;
+                    });
+                }
+            });
+
+            ui.orderForm.addEventListener('submit', handleFormSubmit);
+            
+            ui.clientSearch.addEventListener('input', e => renderClientsTable(e.target.value));
+            ui.vehicleSearch.addEventListener('input', e => renderVehiclesTable(e.target.value));
+            ui.supplySearch.addEventListener('input', e => renderSuppliesTable(e.target.value));
+            ui.orderSearch.addEventListener('input', e => renderOrdersTable(e.target.value));
+
+            ui.ordersTable.addEventListener('change', async (e) => {
+                if (e.target.classList.contains('status-selector')) {
+                    const orderId = e.target.dataset.orderId;
+                    const newStatus = e.target.value;
+                    try {
+                        await window.apiService.updateOrder(orderId, { status: newStatus });
+                        await loadData(); // Recargar para reflejar el cambio de color
+                    } catch (error) {
+                        alert('Error al actualizar estado: ' + error.message);
+                        await loadData(); 
+                    }
+                }
+            });
+            
+            ui.exportBtn.addEventListener('click', exportToCSV);
+        }
+
+        function createItemRow(item = { qty: 1, description: '', price: '' }) {
+            const div = document.createElement('div');
+            div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row';
+            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-7"><input type="text" list="supplies-datalist" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
+            ui.itemsContainer.appendChild(div);
+        }
+
+        function resetForm() {
+            ui.orderForm.reset();
+            ui.itemsContainer.innerHTML = '';
+            currentEditId = null;
+            ui.formModeTitle.textContent = 'Crear Nueva Orden';
+            ui.submitBtn.textContent = 'Guardar Orden';
+            ui.cancelEditBtn.classList.add('hidden');
+            ui.orderNumericIdInput.readOnly = false;
+            updateTotals();
+            createItemRow();
+            document.getElementById('vehicles-datalist').innerHTML = '';
+        }
+
+        function updateTotals() {
+            let subtotal = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                subtotal += (parseFloat(row.querySelector('.item-qty').value) || 0) * (parseFloat(row.querySelector('.item-price').value) || 0);
+            });
+            const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
+            document.getElementById('subtotal-display').textContent = `$${subtotal.toFixed(2)}`;
+            document.getElementById('iva-display').textContent = `$${iva.toFixed(2)}`;
+            document.getElementById('total-display').textContent = `$${(subtotal + iva).toFixed(2)}`;
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            const items = Array.from(document.querySelectorAll('.item-row')).map(row => ({
+                qty: parseFloat(row.querySelector('.item-qty').value),
+                description: row.querySelector('.item-desc').value.trim(),
+                price: parseFloat(row.querySelector('.item-price').value)
+            })).filter(item => item.description && item.qty > 0 && item.price >= 0);
+
+            if (items.length === 0) {
+                alert('Debe agregar al menos un concepto.');
+                return;
+            }
+
+            const subtotal = items.reduce((acc, item) => acc + (item.qty * item.price), 0);
+            const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
+            const total = subtotal + iva;
+
+            const orderData = {
+                numeric_id: parseInt(ui.orderNumericIdInput.value, 10),
+                client: {
+                    name: ui.clientNameInput.value.trim(),
+                    cel: document.getElementById('client-cel').value,
+                    address: document.getElementById('client-address').value,
+                    rfc: document.getElementById('client-rfc').value,
+                    email: document.getElementById('client-email').value
+                },
+                vehicle: {
+                    brand: ui.vehicleBrandInput.value,
+                    plates: document.getElementById('vehicle-plates').value,
+                    year: document.getElementById('vehicle-year').value,
+                    km: document.getElementById('vehicle-km').value,
+                    gasLevel: document.getElementById('vehicle-gas-level').value
+                },
+                items: items,
+                subtotal: subtotal,
+                iva: iva,
+                total: total,
+                ivaApplied: ui.ivaCheckbox.checked,
+                observations: document.getElementById('order-observations').value,
+                status: document.getElementById('order-status').value
+            };
+            
+            try {
+                if (currentEditId) {
+                    await window.apiService.updateOrder(currentEditId, orderData);
+                    alert('Orden actualizada con éxito.');
+                } else {
+                    await window.apiService.createOrder(orderData);
+                    alert(`Orden #${orderData.numeric_id} guardada. Catálogos actualizados.`);
+                }
+                resetForm();
+                await loadData();
+            } catch (error) {
+                alert('Error al guardar la orden: ' + error.message);
+            }
+        }
+        
+        // --- FUNCIONES GLOBALES (ACCIONES) ---
+        
+        window.app = {
+            editOrder: (id) => {
+                const order = localData.orders.find(o => o.id == id);
+                if (!order) return;
+                currentEditId = id;
+                ui.orderNumericIdInput.value = order.numericId;
+                ui.orderNumericIdInput.readOnly = true;
+                
+                Object.keys(order.client).forEach(key => { if(document.getElementById(`client-${key}`)) document.getElementById(`client-${key}`).value = order.client[key] });
+                Object.keys(order.vehicle).forEach(key => { if(document.getElementById(`vehicle-${key}`)) document.getElementById(`vehicle-${key}`).value = order.vehicle[key] });
+                
+                ui.itemsContainer.innerHTML = '';
+                order.items.forEach(item => createItemRow(item));
+                
+                document.getElementById('order-observations').value = order.observations;
+                document.getElementById('order-status').value = order.status;
+                document.getElementById('vehicle-gas-level').value = order.vehicle.gasLevel;
+                ui.ivaCheckbox.checked = order.ivaApplied;
+                updateTotals();
+                
+                ui.formModeTitle.textContent = `Editando Orden #${order.numericId}`;
+                ui.submitBtn.textContent = `Actualizar Orden`;
+                ui.cancelEditBtn.classList.remove('hidden');
+                
+                // Activar la pestaña
+                const tabButton = document.querySelector('.tab-btn[data-tab="nueva-orden"]');
+                if (tabButton) tabButton.click();
+            },
+            deleteOrder: async (id, numericId) => {
+                if (confirm(`¿Estás seguro de eliminar la orden #${numericId}?`)) {
+                    try {
+                        await window.apiService.deleteOrder(id);
+                        alert(`Orden #${numericId} eliminada.`);
+                        await loadData();
+                    } catch (error) {
+                        alert('Error al eliminar: ' + error.message);
+                    }
+                }
+            },
+            printOrder: (id) => {
+                const order = localData.orders.find(o => o.id == id);
+                if (!order) return alert('Orden no encontrada');
+                localStorage.setItem('ordenParaImprimir', JSON.stringify(order));
+                window.open('impresion.html', '_blank');
+            }
+        };
+
+        // --- FUNCION DE EXPORTACIÓN ---
+        function exportToCSV() {
+            if (localData.orders.length === 0) return alert('No hay órdenes para exportar.');
+            let csvContent = "data:text/csv;charset=utf-8,";
+            const headers = "ID Orden,Fecha Creación,Estado,Cliente Nombre,Cliente Teléfono,Cliente Dirección,Cliente RFC,Cliente Email,Vehículo Marca/Modelo,Vehículo Placas,Vehículo Año,Vehículo Kilometraje,Vehículo Nivel Gasolina,Items,Subtotal,IVA,Total,Observaciones\r\n";
+            csvContent += headers;
+
+            localData.orders.forEach(o => {
+                const date = o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-MX') : 'N/A';
+                const items = o.items.map(i => `${i.qty}x ${i.description} ($${i.price})`).join('; ');
+                const row = [
+                    o.numericId, date, o.status, o.client.name, o.client.cel, `"${o.client.address}"`, o.client.rfc, o.client.email,
+                    o.vehicle.brand, o.vehicle.plates, o.vehicle.year, o.vehicle.km, o.vehicle.gasLevel,
+                    `"${items}"`, o.subtotal, o.iva, o.total, `"${o.observations}"`
+                ].join(',');
+                csvContent += row + "\r\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `historial_completo_ordenes_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+      
+            link.click();
+            document.body.removeChild(link);
+        }
+
+    </script>
+</body>
+</html>
+

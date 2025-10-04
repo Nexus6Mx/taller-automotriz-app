@@ -1,0 +1,45 @@
+# Definición de los servicios (contenedores)
+services:
+  # Servicio 1: El servidor web (Apache + PHP)
+  web:
+    # Construye la imagen a partir del Dockerfile en la carpeta 'docker'
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    # Mapea el puerto 8888 de tu máquina al puerto 80 del contenedor
+    ports:
+      - "8888:80"
+    # Monta el código fuente del proyecto en el directorio web del contenedor.
+    # Esto permite que los cambios en tu código se reflejen al instante.
+    volumes:
+      - .:/var/www/html
+    # Indica que este servicio depende de que el servicio 'db' se inicie primero
+    depends_on:
+      - db
+
+  # Servicio 2: La base de datos (MySQL)
+  db:
+    # Usa la imagen oficial de MySQL versión 8.0
+    image: mysql:8.0
+    # Reinicia el contenedor automáticamente a menos que se detenga manualmente
+    restart: unless-stopped
+    # Mapea el puerto 3306 de tu máquina al del contenedor para que puedas
+    # conectarte con herramientas externas como DBeaver o TablePlus.
+    ports:
+      - "3306:3306"
+    # Variables de entorno para configurar la base de datos.
+    # Docker creará automáticamente la base de datos y el usuario con estos datos.
+    environment:
+      MYSQL_DATABASE: 'u185421649_gestor_ordenes'
+      MYSQL_USER: 'u185421649_gestor_user'
+      MYSQL_PASSWORD: 'Chckcl74&'
+      MYSQL_ROOT_PASSWORD: 'rootpassword' # Puedes cambiar esta contraseña root
+    # Volumen para persistir los datos de la base de datos.
+    # Sin esto, perderías tus datos cada vez que detengas el contenedor.
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+# Definición de los volúmenes
+volumes:
+  # El volumen nombrado que usará el servicio de base de datos
+  mysql-data:

@@ -1,0 +1,7 @@
+﻿ID Orden,Fecha Creación,Estado,Cliente Nombre,Cliente Teléfono,Cliente Dirección,Cliente RFC,Cliente Email,Vehículo Marca/Modelo,Vehículo Placas,Vehículo Año,Vehículo Kilometraje,Vehículo Nivel Gasolina,Items,Subtotal,IVA,Total,Observaciones
+9982,"27/9/2025","En reparación","Miguel","5528957944","","","","SEAT Ibiza blanco","758-ZXA",,96990,"3/4","1x Servicio de cambio de kit de distribución ($0.00)",0.00,0.00,0.00,""
+9983,"27/9/2025","En reparación","Miguel","","","","","Mercedez Benz A180 Rojo","973-ZCH",2013,203486,"1/2","1x Servicio de alternador ($0.00)",0.00,0.00,0.00,""
+9981,"27/9/2025","En reparación","Tendenzza","3333597385","","","","GM Aveo blanco","PDR-5730",2015,,"","1x Servicio ($0.00)",0.00,0.00,0.00,"Reparación marcha, clutch, venta de llantas delanteras, tapón de bomba de frenos"
+9978,"27/9/2025","En reparación","Ricardo Perez","5567918335","","","","Toyota Hilander gris","TTS-403-A",2013,224457,"1/2","1x Servicio ($0.00)",0.00,0.00,0.00,"Reparación transmisión, cambio de bomba de agua"
+9975,"27/9/2025","En reparación","Gabriela Bañuelos","5555002535","","","","Dodge Stratus Gris","NRM-807-A",2005,127309,"1/4","1x Verificacion Estado de Mexico ($1450.00)",1450.00,0.00,1450.00,"Garantia Bomba de aceite, filtro de aceite y aceite 5 litros"
+9904,"27/9/2025","En reparación","Juan Pablo","5543420292","","","","Pontiac Montana Azul","LPB-537-C",1999,205689,"Lleno","1x Arbol  de levas ($0.00) | 1x Juego de juntas cabezas ($0.00) | 1x Garrafa de aceite ($0.00) | 1x Filtro de aceite ($0.00)",0.00,0.00,0.00,"Garantia"
