@@ -90,17 +90,6 @@
             }
         });
 
-        function formatCurrency(value) {
-            const number = parseFloat(value);
-            if (isNaN(number)) {
-                return value; // Devuelve el valor original si no es un número
-            }
-            return '$ ' + number.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-        }
-
         function loadOrders() {
             const q = query(collection(db, `artifacts/${appId}/users/${userId}/orders`), orderBy("createdAt", "desc"));
             onSnapshot(q, snapshot => {
@@ -127,7 +116,7 @@
 
                 // Formatear items
                 const itemsText = order.items.map(item => 
-                    `${item.qty}x ${item.description} (${formatCurrency(item.price)})`
+                    `${item.qty}x ${item.description} ($${item.price.toFixed(2)})`
                 ).join('<br>');
 
                 // Crear celdas
@@ -146,9 +135,9 @@
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.vehicle.km || ''}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.vehicle.gasLevel || ''}</td>
                     <td class="px-6 py-4 text-sm text-gray-500">${itemsText}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatCurrency(order.subtotal)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.iva ? formatCurrency(order.iva) : '$ 0.00'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${formatCurrency(order.total)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${order.subtotal.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${order.iva ? order.iva.toFixed(2) : '0.00'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">$${order.total.toFixed(2)}</td>
                     <td class="px-6 py-4 text-sm text-gray-500">${order.observations || ''}</td>
                 `;
                 
@@ -197,28 +186,28 @@
                 
                 // Formatear items
                 const itemsText = order.items.map(item => 
-                    `${item.qty}x ${item.description} (${formatCurrency(item.price)})`
+                    `${item.qty}x ${item.description} ($${item.price.toFixed(2)})`
                 ).join(' | ');
 
                 // Crear fila de la orden
                 const row = [
                     order.numericId,
-                    `"${creationDate}"`, 
-                    `"${order.status}"`, 
-                    `"${order.client.name}"`, 
-                    `"${order.client.cel || ''}"`, 
-                    `"${order.client.address || ''}"`, 
-                    `"${order.client.rfc || ''}"`, 
-                    `"${order.client.email || ''}"`, 
-                    `"${order.vehicle.brand}"`, 
-                    `"${order.vehicle.plates || ''}"`, 
+                    `"${creationDate}"`,
+                    `"${order.status}"`,
+                    `"${order.client.name}"`,
+                    `"${order.client.cel || ''}"`,
+                    `"${order.client.address || ''}"`,
+                    `"${order.client.rfc || ''}"`,
+                    `"${order.client.email || ''}"`,
+                    `"${order.vehicle.brand}"`,
+                    `"${order.vehicle.plates || ''}"`,
                     order.vehicle.year || '',
                     order.vehicle.km || '',
-                    `"${order.vehicle.gasLevel || ''}"`, 
-                    `"${itemsText}"`, 
-                    order.subtotal,
-                    order.iva ? order.iva : '0.00',
-                    order.total,
+                    `"${order.vehicle.gasLevel || ''}"`,
+                    `"${itemsText}"`,
+                    order.subtotal.toFixed(2),
+                    order.iva ? order.iva.toFixed(2) : '0.00',
+                    order.total.toFixed(2),
                     `"${order.observations || ''}"`
                 ];
                 
