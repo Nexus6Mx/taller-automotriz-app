@@ -183,13 +183,15 @@
                                     <div class="flex justify-between font-medium"><span>IVA:</span><span id="iva-display">$0.00</span></div>
                                     <div class="flex justify-between font-bold text-lg text-gray-900 border-t pt-2 mt-2"><span>Total:</span><span id="total-display">$0.00</span></div>
                                     <div class="border-t pt-2 mt-2">
-                                        <div class="flex items-center gap-2 mb-2">
-                                            <label for="advance-amount" class="text-sm font-medium text-gray-700 whitespace-nowrap">Anticipo:</label>
-                                            <input type="number" id="advance-amount" step="0.01" min="0" placeholder="0.00" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
-                                        </div>
-                                        <div class="flex items-center gap-2 mb-2">
-                                            <label for="advance-date" class="text-sm font-medium text-gray-700 whitespace-nowrap">Fecha:</label>
-                                            <input type="text" id="advance-date" placeholder="DD/MM/YYYY" maxlength="10" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                        <div class="flex items-center gap-4 mb-2">
+                                            <div class="flex items-center gap-2">
+                                                <label for="advance-date" class="text-sm font-medium text-gray-700 whitespace-nowrap">Fecha:</label>
+                                                <input type="text" id="advance-date" placeholder="DD/MM/YYYY" maxlength="10" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <label for="advance-amount" class="text-sm font-medium text-gray-700 whitespace-nowrap">Anticipo:</label>
+                                                <input type="number" id="advance-amount" step="0.01" min="0" placeholder="0.00" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="flex justify-between font-bold text-xl text-green-600 border-t pt-2 mt-2"><span>Total a Pagar:</span><span id="final-total-display">$0.00</span></div>
