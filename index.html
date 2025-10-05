@@ -630,8 +630,35 @@
         function createItemRow(item = { qty: 1, description: '', unitPrice: '', price: '' }) {
             const div = document.createElement('div');
             div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row';
+
+            // Aplicar formato de moneda a los valores numéricos
+            const formattedUnitPrice = item.unitPrice ? formatCurrency(item.unitPrice) : '';
+            const formattedPrice = item.price ? formatCurrency(item.price) : '';
+
             div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" list="supplies-datalist" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
             ui.itemsContainer.appendChild(div);
+
+            // Aplicar formato visual a los campos numéricos después de crearlos
+            const unitPriceInput = div.querySelector('.item-unit-price');
+            const priceInput = div.querySelector('.item-price');
+
+            if (unitPriceInput && item.unitPrice) {
+                unitPriceInput.addEventListener('blur', function() {
+                    const value = parseFloat(this.value) || 0;
+                    if (value > 0) {
+                        this.value = value;
+                    }
+                });
+            }
+
+            if (priceInput && item.price) {
+                priceInput.addEventListener('blur', function() {
+                    const value = parseFloat(this.value) || 0;
+                    if (value > 0) {
+                        this.value = value;
+                    }
+                });
+            }
         }
 
         function resetForm() {
