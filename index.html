@@ -181,7 +181,18 @@
                                 <div class="text-right border-t pt-2">
                                     <div class="flex justify-between font-medium"><span>Subtotal:</span><span id="subtotal-display">$0.00</span></div>
                                     <div class="flex justify-between font-medium"><span>IVA:</span><span id="iva-display">$0.00</span></div>
-                                    <div class="flex justify-between font-bold text-xl text-gray-900 border-t pt-2 mt-2"><span>Total:</span><span id="total-display">$0.00</span></div>
+                                    <div class="flex justify-between font-bold text-lg text-gray-900 border-t pt-2 mt-2"><span>Total:</span><span id="total-display">$0.00</span></div>
+                                    <div class="border-t pt-2 mt-2">
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <label for="advance-amount" class="text-sm font-medium text-gray-700 whitespace-nowrap">Anticipo:</label>
+                                            <input type="number" id="advance-amount" step="0.01" min="0" placeholder="0.00" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                        </div>
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <label for="advance-date" class="text-sm font-medium text-gray-700 whitespace-nowrap">Fecha:</label>
+                                            <input type="text" id="advance-date" placeholder="DD/MM/YYYY" maxlength="10" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-between font-bold text-xl text-green-600 border-t pt-2 mt-2"><span>Total a Pagar:</span><span id="final-total-display">$0.00</span></div>
                                 </div>
                             </div>
                             <div class="mt-6 flex items-center space-x-4">
@@ -385,7 +396,7 @@
         // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
         
         function renderOrdersTable(filter = '') {
-            const filteredOrders = localData.orders.filter(o => 
+            const filteredOrders = localData.orders.filter(o =>
                 `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase().includes(filter.toLowerCase())
             );
             ui.ordersTable.innerHTML = filteredOrders.map(o => {
@@ -402,7 +413,7 @@
                     <td class="px-6 py-4">${dateString}</td>
                     <td class="px-6 py-4">${o.client.name}</td>
                     <td class="px-6 py-4">${o.vehicle.brand} ${o.vehicle.plates}</td>
-                    <td class="px-6 py-4 font-semibold">$${Number(o.total).toFixed(2)}</td>
+                    <td class="px-6 py-4 font-semibold">${formatCurrency(o.total)}</td>
                     <td class="px-6 py-4 space-x-2">
                         <button onclick="window.app.editOrder('${o.id}')" class="text-indigo-600 hover:text-indigo-900">Editar</button>
                         <button onclick="window.app.printOrder('${o.id}')" class="text-blue-600 hover:text-blue-900">Imprimir</button>
@@ -443,19 +454,26 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-bold">${s.numeric_id}</td>
                     <td class="px-6 py-4">${s.description}</td>
-                    <td class="px-6 py-4">$${Number(s.price).toFixed(2)}</td>
+                    <td class="px-6 py-4">${formatCurrency(s.price)}</td>
                 </tr>`).join('');
         }
 
         // --- FUNCIONES DE DASHBOARD ---
         
+        function formatCurrency(amount) {
+            return `$${Number(amount).toLocaleString('es-MX', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })}`;
+        }
+
         function updateDashboard() {
             const orders = localData.orders;
             const totalOrders = orders.length;
             const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
             const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-            document.getElementById('kpi-total-revenue').textContent = `$${totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            document.getElementById('kpi-avg-ticket').textContent = `$${avgTicket.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('kpi-total-revenue').textContent = formatCurrency(totalRevenue);
+            document.getElementById('kpi-avg-ticket').textContent = formatCurrency(avgTicket);
             document.getElementById('kpi-total-orders').textContent = totalOrders;
             updateStatusChart(orders);
             updateRevenueChart(orders);
@@ -524,6 +542,10 @@
             ui.addItemBtn.addEventListener('click', () => createItemRow());
             ui.cancelEditBtn.addEventListener('click', resetForm);
             ui.ivaCheckbox.addEventListener('change', updateTotals);
+            
+            // Listeners para el anticipo
+            document.getElementById('advance-amount').addEventListener('input', updateTotals);
+            document.getElementById('advance-date').addEventListener('input', formatDateInput);
             
             ui.itemsContainer.addEventListener('click', e => {
                 if (e.target.closest('.remove-item-btn')) {
@@ -613,9 +635,36 @@
                 subtotal += (parseFloat(row.querySelector('.item-qty').value) || 0) * (parseFloat(row.querySelector('.item-price').value) || 0);
             });
             const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
-            document.getElementById('subtotal-display').textContent = `$${subtotal.toFixed(2)}`;
-            document.getElementById('iva-display').textContent = `$${iva.toFixed(2)}`;
-            document.getElementById('total-display').textContent = `$${(subtotal + iva).toFixed(2)}`;
+            const total = subtotal + iva;
+            const advanceAmount = parseFloat(document.getElementById('advance-amount').value) || 0;
+            const finalTotal = total - advanceAmount;
+
+            document.getElementById('subtotal-display').textContent = formatCurrency(subtotal);
+            document.getElementById('iva-display').textContent = formatCurrency(iva);
+            document.getElementById('total-display').textContent = formatCurrency(total);
+            document.getElementById('final-total-display').textContent = formatCurrency(finalTotal);
+        }
+
+        function formatDateInput(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Eliminar caracteres no numéricos
+            if (value.length >= 2) {
+                value = value.slice(0, 2) + '/' + value.slice(2);
+            }
+            if (value.length >= 5) {
+                value = value.slice(0, 5) + '/' + value.slice(5, 9);
+            }
+            e.target.value = value;
+        }
+
+        function validateDate(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) return null;
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         }
 
         async function handleFormSubmit(e) {
@@ -755,4 +804,3 @@
     </script>
 </body>
 </html>
-
