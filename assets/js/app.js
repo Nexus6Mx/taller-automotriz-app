@@ -146,3 +146,19 @@ class APIService {
 
 // Instancia global del servicio para que esté disponible en toda la aplicación
 window.apiService = new APIService();
+
+/**
+ * Formatea un número como moneda.
+ * @param {number|string} value - El número a formatear.
+ * @returns {string} - El número formateado como "$ 1,234.56".
+ */
+function formatCurrency(value) {
+    const number = parseFloat(value);
+    if (isNaN(number)) {
+        return value; // Devuelve el valor original si no es un número
+    }
+    return '$ ' + number.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+}

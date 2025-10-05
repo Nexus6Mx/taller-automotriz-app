@@ -402,7 +402,7 @@
                     <td class="px-6 py-4">${dateString}</td>
                     <td class="px-6 py-4">${o.client.name}</td>
                     <td class="px-6 py-4">${o.vehicle.brand} ${o.vehicle.plates}</td>
-                    <td class="px-6 py-4 font-semibold">$${Number(o.total).toFixed(2)}</td>
+                    <td class="px-6 py-4 font-semibold">${formatCurrency(o.total)}</td>
                     <td class="px-6 py-4 space-x-2">
                         <button onclick="window.app.editOrder('${o.id}')" class="text-indigo-600 hover:text-indigo-900">Editar</button>
                         <button onclick="window.app.printOrder('${o.id}')" class="text-blue-600 hover:text-blue-900">Imprimir</button>
@@ -443,7 +443,7 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-bold">${s.numeric_id}</td>
                     <td class="px-6 py-4">${s.description}</td>
-                    <td class="px-6 py-4">$${Number(s.price).toFixed(2)}</td>
+                    <td class="px-6 py-4">${formatCurrency(s.price)}</td>
                 </tr>`).join('');
         }
 
@@ -454,8 +454,8 @@
             const totalOrders = orders.length;
             const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
             const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-            document.getElementById('kpi-total-revenue').textContent = `$${totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            document.getElementById('kpi-avg-ticket').textContent = `$${avgTicket.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('kpi-total-revenue').textContent = formatCurrency(totalRevenue);
+            document.getElementById('kpi-avg-ticket').textContent = formatCurrency(avgTicket);
             document.getElementById('kpi-total-orders').textContent = totalOrders;
             updateStatusChart(orders);
             updateRevenueChart(orders);
@@ -613,9 +613,9 @@
                 subtotal += (parseFloat(row.querySelector('.item-qty').value) || 0) * (parseFloat(row.querySelector('.item-price').value) || 0);
             });
             const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
-            document.getElementById('subtotal-display').textContent = `$${subtotal.toFixed(2)}`;
-            document.getElementById('iva-display').textContent = `$${iva.toFixed(2)}`;
-            document.getElementById('total-display').textContent = `$${(subtotal + iva).toFixed(2)}`;
+            document.getElementById('subtotal-display').textContent = formatCurrency(subtotal);
+            document.getElementById('iva-display').textContent = formatCurrency(iva);
+            document.getElementById('total-display').textContent = formatCurrency(subtotal + iva);
         }
 
         async function handleFormSubmit(e) {
@@ -733,7 +733,7 @@
 
             localData.orders.forEach(o => {
                 const date = o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-MX') : 'N/A';
-                const items = o.items.map(i => `${i.qty}x ${i.description} ($${i.price})`).join('; ');
+                const items = o.items.map(i => `${i.qty}x ${i.description} (${formatCurrency(i.price)})`).join('; ');
                 const row = [
                     o.numericId, date, o.status, o.client.name, o.client.cel, `"${o.client.address}"`, o.client.rfc, o.client.email,
                     o.vehicle.brand, o.vehicle.plates, o.vehicle.year, o.vehicle.km, o.vehicle.gasLevel,
@@ -755,4 +755,3 @@
     </script>
 </body>
 </html>
-
