@@ -557,11 +557,27 @@
             });
 
             ui.itemsContainer.addEventListener('input', e => {
-                updateTotals();
-                if (e.target.classList.contains('item-desc')) {
-                    const supply = localData.supplies.find(s => s.description.toLowerCase() === e.target.value.toLowerCase());
-                    if (supply) e.target.closest('.item-row').querySelector('.item-price').value = supply.price;
+                const row = e.target.closest('.item-row');
+                if (row) {
+                    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+                    const unitPrice = parseFloat(row.querySelector('.item-unit-price').value) || 0;
+                    const totalPrice = qty * unitPrice;
+
+                    // Actualizar el campo de importe automáticamente
+                    row.querySelector('.item-price').value = totalPrice;
+
+                    // Si cambió la descripción, buscar precio del insumo
+                    if (e.target.classList.contains('item-desc')) {
+                        const supply = localData.supplies.find(s => s.description.toLowerCase() === e.target.value.toLowerCase());
+                        if (supply) {
+                            row.querySelector('.item-unit-price').value = supply.price;
+                            // Recalcular el total con el precio encontrado
+                            const newTotal = qty * supply.price;
+                            row.querySelector('.item-price').value = newTotal;
+                        }
+                    }
                 }
+                updateTotals();
             });
 
             ui.clientNameInput.addEventListener('input', e => {
@@ -611,10 +627,10 @@
             ui.exportBtn.addEventListener('click', exportToCSV);
         }
 
-        function createItemRow(item = { qty: 1, description: '', price: '' }) {
+        function createItemRow(item = { qty: 1, description: '', unitPrice: '', price: '' }) {
             const div = document.createElement('div');
             div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row';
-            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-7"><input type="text" list="supplies-datalist" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
+            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" list="supplies-datalist" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
             ui.itemsContainer.appendChild(div);
         }
 
@@ -707,6 +723,8 @@
                 iva: iva,
                 total: total,
                 ivaApplied: ui.ivaCheckbox.checked,
+                advanceAmount: parseFloat(document.getElementById('advance-amount').value) || 0,
+                advanceDate: validateDate(document.getElementById('advance-date').value),
                 observations: document.getElementById('order-observations').value,
                 status: document.getElementById('order-status').value
             };
@@ -735,23 +753,46 @@
                 currentEditId = id;
                 ui.orderNumericIdInput.value = order.numericId;
                 ui.orderNumericIdInput.readOnly = true;
-                
+
                 Object.keys(order.client).forEach(key => { if(document.getElementById(`client-${key}`)) document.getElementById(`client-${key}`).value = order.client[key] });
                 Object.keys(order.vehicle).forEach(key => { if(document.getElementById(`vehicle-${key}`)) document.getElementById(`vehicle-${key}`).value = order.vehicle[key] });
-                
+
                 ui.itemsContainer.innerHTML = '';
-                order.items.forEach(item => createItemRow(item));
-                
+                order.items.forEach(item => {
+                    // Crear el item con la nueva estructura incluyendo precio unitario
+                    const itemWithUnitPrice = {
+                        qty: item.qty,
+                        description: item.description,
+                        unitPrice: item.price / item.qty, // Calcular precio unitario
+                        price: item.price
+                    };
+                    createItemRow(itemWithUnitPrice);
+                });
+
                 document.getElementById('order-observations').value = order.observations;
                 document.getElementById('order-status').value = order.status;
                 document.getElementById('vehicle-gas-level').value = order.vehicle.gasLevel;
                 ui.ivaCheckbox.checked = order.ivaApplied;
+
+                // Cargar datos de anticipo si existen
+                if (order.advanceAmount) {
+                    document.getElementById('advance-amount').value = order.advanceAmount;
+                }
+                if (order.advanceDate) {
+                    // Convertir formato de fecha de YYYY-MM-DD a DD/MM/YYYY
+                    const dateParts = order.advanceDate.split('-');
+                    if (dateParts.length === 3) {
+                        const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                        document.getElementById('advance-date').value = formattedDate;
+                    }
+                }
+
                 updateTotals();
-                
+
                 ui.formModeTitle.textContent = `Editando Orden #${order.numericId}`;
                 ui.submitBtn.textContent = `Actualizar Orden`;
                 ui.cancelEditBtn.classList.remove('hidden');
-                
+
                 // Activar la pestaña
                 const tabButton = document.querySelector('.tab-btn[data-tab="nueva-orden"]');
                 if (tabButton) tabButton.click();
