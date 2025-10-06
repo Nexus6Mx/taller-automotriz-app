@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .tab-content { display: none; }
@@ -15,6 +16,23 @@
         .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
         .status-connected { background-color: #22c55e; }
         .status-disconnected { background-color: #ef4444; }
+        /* Estilos para el autocompletado */
+        .autocomplete-results {
+            position: absolute;
+            border: 1px solid #d1d5db;
+            background-color: white;
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            width: calc(100% - 2rem); /* Ajustar al ancho del input padre */
+        }
+        .autocomplete-item {
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+        .autocomplete-item:hover, .autocomplete-item.active {
+            background-color: #f3f4f6;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -55,7 +73,7 @@
         <main>
             <!-- Sección: Dashboard -->
              <div id="dashboard" class="tab-content active">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 draggable-container">
                     <div class="bg-white p-6 rounded-lg shadow text-center">
                         <h3 class="text-lg font-medium text-gray-500">Total Ingresado</h3>
                         <p id="kpi-total-revenue" class="mt-1 text-4xl font-bold text-green-600">$0.00</p>
@@ -69,7 +87,7 @@
                         <p id="kpi-total-orders" class="mt-1 text-4xl font-bold text-indigo-600">0</p>
                     </div>
                 </div>
-                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6 draggable-container">
                     <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow">
                         <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes por Estado</h3>
                         <canvas id="status-chart"></canvas>
@@ -77,6 +95,51 @@
                     <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow">
                         <h3 class="text-lg font-semibold text-gray-800 mb-4">Ingresos por Mes (Último año)</h3>
                         <canvas id="revenue-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Nuevas tablas del dashboard -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 draggable-container">
+                    <!-- Tabla de Órdenes NO Pagadas -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes Pendientes de Pago</h3>
+                        <div class="text-sm text-gray-600 mb-2">Más antiguas primero</div>
+                        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Orden</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Cliente</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Estado</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="unpaid-orders-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Se llenará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Órdenes Pagadas -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes Pagadas</h3>
+                        <div class="text-sm text-gray-600 mb-2">Más recientes primero</div>
+                        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Orden</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Cliente</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Estado</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="paid-orders-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Se llenará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -95,9 +158,9 @@
                         <div class="border border-gray-200 p-4 rounded-md">
                             <h3 class="text-lg font-semibold mb-4 text-gray-700">1. Datos del Cliente</h3>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
+                                <div class="relative">
                                     <label for="client-name" class="block text-sm font-medium text-gray-600">Nombre</label>
-                                    <input type="text" id="client-name" list="clients-datalist" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                                    <input type="text" id="client-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
                                 </div>
                                 <div>
                                     <label for="client-cel" class="block text-sm font-medium text-gray-600">Teléfono</label>
@@ -304,6 +367,8 @@
             orderSearch: document.getElementById('order-search'),
             orderNumericIdInput: document.getElementById('order-numeric-id'),
             ordersTable: document.getElementById('orders-table'),
+            unpaidOrdersTable: document.getElementById('unpaid-orders-table'),
+            paidOrdersTable: document.getElementById('paid-orders-table'),
             logoutBtn: document.getElementById('logout-btn'),
             userEmail: document.getElementById('user-email')
         };
@@ -393,6 +458,8 @@
             updateDashboard();
             updateClientsDatalist();
             updateSuppliesDatalist();
+            renderUnpaidOrdersTable();
+            renderPaidOrdersTable();
         }
 
         // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
@@ -523,6 +590,82 @@
             });
         }
 
+        // --- FUNCIONES PARA TABLAS DEL DASHBOARD ---
+
+        function renderUnpaidOrdersTable() {
+            // Filtrar órdenes NO pagadas (todos los estados excepto 'Entregado Pagado')
+            const unpaidOrders = localData.orders.filter(order => order.status !== 'Entregado Pagado');
+
+            // Ordenar por fecha ascendente (más viejas primero)
+            unpaidOrders.sort((a, b) => {
+                if (!a.createdAt && !b.createdAt) return 0;
+                if (!a.createdAt) return 1;
+                if (!b.createdAt) return -1;
+                return new Date(a.createdAt) - new Date(b.createdAt);
+            });
+
+            // Renderizar tabla
+            ui.unpaidOrdersTable.innerHTML = unpaidOrders.slice(0, 10).map(order => {
+                const statusInfo = statusConfig[order.status] || { class: 'bg-gray-200 text-gray-800' };
+                const dateString = order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-MX') : 'N/A';
+                const clientName = order.client?.name || 'N/A';
+
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 text-xs font-bold">${order.numericId}</td>
+                    <td class="px-3 py-2 text-xs">${clientName.length > 15 ? clientName.substring(0, 15) + '...' : clientName}</td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.class}">
+                            ${order.status.length > 12 ? order.status.substring(0, 12) + '...' : order.status}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-xs font-semibold">${formatCurrency(order.total)}</td>
+                </tr>`;
+            }).join('');
+
+            // Mostrar mensaje si no hay órdenes
+            if (unpaidOrders.length === 0) {
+                ui.unpaidOrdersTable.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-center text-sm text-gray-500">No hay órdenes pendientes</td></tr>';
+            }
+        }
+
+        function renderPaidOrdersTable() {
+            // Filtrar órdenes pagadas (solo 'Entregado Pagado')
+            const paidOrders = localData.orders.filter(order => order.status === 'Entregado Pagado');
+
+            // Ordenar por fecha descendente (más nuevas primero)
+            paidOrders.sort((a, b) => {
+                if (!a.createdAt && !b.createdAt) return 0;
+                if (!a.createdAt) return 1;
+                if (!b.createdAt) return -1;
+                return new Date(b.createdAt) - new Date(a.createdAt);
+            });
+
+            // Renderizar tabla
+            ui.paidOrdersTable.innerHTML = paidOrders.slice(0, 10).map(order => {
+                const statusInfo = statusConfig[order.status] || { class: 'bg-gray-200 text-gray-800' };
+                const dateString = order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-MX') : 'N/A';
+                const clientName = order.client?.name || 'N/A';
+
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 text-xs font-bold">${order.numericId}</td>
+                    <td class="px-3 py-2 text-xs">${clientName.length > 15 ? clientName.substring(0, 15) + '...' : clientName}</td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.class}">
+                            ${order.status.length > 12 ? order.status.substring(0, 12) + '...' : order.status}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-xs font-semibold">${formatCurrency(order.total)}</td>
+                </tr>`;
+            }).join('');
+
+            // Mostrar mensaje si no hay órdenes
+            if (paidOrders.length === 0) {
+                ui.paidOrdersTable.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-center text-sm text-gray-500">No hay órdenes pagadas</td></tr>';
+            }
+        }
+
         // --- LÓGICA DE AUTOCOMPLETADO (DATALISTS) ---
         
         function updateClientsDatalist() {
@@ -629,9 +772,9 @@
 
         function createItemRow(item = { qty: 1, description: '', unitPrice: '', price: '' }) {
             const div = document.createElement('div');
-            div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row';
+            div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row relative';
 
-            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" list="supplies-datalist" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
+            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
             ui.itemsContainer.appendChild(div);
 
             // Aplicar formato visual a los campos numéricos después de crearlos
@@ -652,7 +795,7 @@
                 formatNumberAsCurrency(unitPriceInput, item.unitPrice);
                 unitPriceInput.addEventListener('focus', function() {
                     // Al hacer focus, mostrar solo el número sin formato
-                    const numValue = parseFloat(this.value.replace(/[^\d.-]/g, '')) || 0;
+                    const numValue = parseFloat(this.value.replace(/[^\u0000-\uFFFF]/g, '')) || 0;
                     this.value = numValue;
                 });
                 unitPriceInput.addEventListener('blur', function() {
@@ -665,7 +808,7 @@
                 formatNumberAsCurrency(priceInput, item.price);
                 priceInput.addEventListener('focus', function() {
                     // Al hacer focus, mostrar solo el número sin formato
-                    const numValue = parseFloat(this.value.replace(/[^\d.-]/g, '')) || 0;
+                    const numValue = parseFloat(this.value.replace(/[^\u0000-\uFFFF]/g, '')) || 0;
                     this.value = numValue;
                 });
                 priceInput.addEventListener('blur', function() {
@@ -885,6 +1028,142 @@
             document.body.removeChild(link);
         }
 
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const containers = document.querySelectorAll('.draggable-container');
+        containers.forEach(container => {
+            new Sortable(container, {
+                animation: 150,
+                ghostClass: 'bg-blue-100'
+            });
+        });
+    });
+    </script>
+    <script>
+        // --- LÓGICA DE AUTOCOMPLETADO EN TIEMPO REAL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            /**
+             * Función genérica para crear y manejar un menú de autocompletado.
+             * @param {HTMLInputElement} inputElement - El campo de texto al que se adjunta el autocompletado.
+             * @param {Function} searchFn - La función asíncrona que realiza la búsqueda (ej. window.apiService.searchClients).
+             * @param {Function} onSelect - La función que se ejecuta cuando un usuario selecciona un elemento.
+             * @param {Function} resultFormatter - La función que formatea cada resultado en la lista.
+             * @param {string} searchProperty - El nombre de la propiedad sobre la que se debe buscar/filtrar (ej. 'name').
+             */
+            function setupAutocomplete(inputElement, searchFn, onSelect, resultFormatter, searchProperty) {
+                let resultsContainer = null;
+                let debounceTimer;
+
+                inputElement.addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(async () => {
+                        const query = e.target.value;
+                        if (query.length < 1) { // MODIFICADO: Buscar desde el primer caracter
+                            removeResultsContainer();
+                            return;
+                        }
+
+                        try {
+                            // La API puede devolver más resultados de los necesarios, filtramos en el cliente
+                            const results = await searchFn(query);
+                            const lowerCaseQuery = query.toLowerCase();
+                            
+                            // MODIFICADO: Filtrar para que los resultados COMIENCEN con la búsqueda
+                            const filteredResults = (results.data || []).filter(item => 
+                                item[searchProperty].toLowerCase().startsWith(lowerCaseQuery)
+                            );
+
+                            showResults(filteredResults);
+                        } catch (error) {
+                            console.error('Error en autocompletado:', error);
+                            removeResultsContainer();
+                        }
+                    }, 250); // Debounce para no saturar la API con cada tecla
+                });
+
+                function showResults(results) {
+                    removeResultsContainer();
+                    if (results.length === 0) return;
+
+                    resultsContainer = document.createElement('div');
+                    resultsContainer.className = 'autocomplete-results rounded-md shadow-lg';
+                    // Asegurar que el contenedor de resultados se posicione correctamente
+                    inputElement.parentElement.style.position = 'relative'; 
+                    inputElement.parentElement.appendChild(resultsContainer);
+
+                    results.forEach(result => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'autocomplete-item';
+                        itemDiv.innerHTML = resultFormatter(result);
+                        itemDiv.addEventListener('click', () => {
+                            onSelect(result);
+                            removeResultsContainer();
+                        });
+                        resultsContainer.appendChild(itemDiv);
+                    });
+                }
+
+                function removeResultsContainer() {
+                    if (resultsContainer) {
+                        resultsContainer.remove();
+                        resultsContainer = null;
+                    }
+                }
+
+                // Cerrar el menú si se hace clic fuera
+                document.addEventListener('click', (e) => {
+                    if (resultsContainer && !inputElement.contains(e.target) && !resultsContainer.contains(e.target)) {
+                        removeResultsContainer();
+                    }
+                });
+            }
+
+            // 1. Autocompletado para el Nombre del Cliente
+            const clientNameInput = document.getElementById('client-name');
+            setupAutocomplete(clientNameInput, 
+                (query) => window.apiService.searchClients(query),
+                (client) => {
+                    document.getElementById('client-name').value = client.name;
+                    document.getElementById('client-cel').value = client.cel || '';
+                    document.getElementById('client-address').value = client.address || '';
+                    document.getElementById('client-rfc').value = client.rfc || '';
+                    document.getElementById('client-email').value = client.email || '';
+                },
+                (client) => `<span>${client.name}</span><span class="text-sm text-gray-500 ml-2">${client.rfc || ''}</span>`,
+                'name' // Propiedad para buscar: 'name'
+            );
+
+            // 2. Autocompletado para los Conceptos (usando delegación de eventos)
+            const itemsContainer = document.getElementById('items-container');
+            itemsContainer.addEventListener('focusin', (e) => {
+                if (e.target && e.target.classList.contains('item-desc')) {
+                    // Si el autocompletado ya está activo para este input, no hacer nada
+                    if (e.target.hasAttribute('data-autocomplete-active')) return;
+
+                    e.target.setAttribute('data-autocomplete-active', 'true');
+
+                    setupAutocomplete(e.target, 
+                        (query) => window.apiService.searchSupplies(query),
+                        (supply) => {
+                            const row = e.target.closest('.item-row');
+                            if (row) {
+                                e.target.value = supply.description;
+                                const unitPriceInput = row.querySelector('.item-unit-price');
+                                const qtyInput = row.querySelector('.item-qty');
+                                unitPriceInput.value = supply.price;
+                                
+                                // Disparar un evento input para que se recalcule el total de la fila
+                                unitPriceInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        },
+                        (supply) => `<span>${supply.description}</span><span class="text-sm font-bold text-green-600 ml-4">${formatCurrency(supply.price)}</span>`,
+                        'description' // Propiedad para buscar: 'description'
+                    );
+                }
+            });
+        });
     </script>
 </body>
 </html>

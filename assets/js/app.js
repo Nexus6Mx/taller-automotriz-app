@@ -128,6 +128,10 @@ class APIService {
         return await this.request('/clients/read.php');
     }
 
+    async searchClients(query) {
+        return await this.request(`/clients/read.php?q=${encodeURIComponent(query)}`);
+    }
+
     async createClient(clientData) {
         return await this.request('/clients/create.php', {
             method: 'POST',
@@ -141,6 +145,10 @@ class APIService {
     
      async getSupplies() {
         return await this.request('/supplies/read.php');
+    }
+
+    async searchSupplies(query) {
+        return await this.request(`/supplies/read.php?q=${encodeURIComponent(query)}`);
     }
 }
 
