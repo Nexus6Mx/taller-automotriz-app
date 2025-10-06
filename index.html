@@ -319,12 +319,12 @@
                         <button id="export-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Exportar a CSV</button>
                     </div>
                     <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">#</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Estado</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Fecha</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Cliente</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Vehículo</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Total</th>
+                        <th data-sort-key="numericId" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">#</th>
+                        <th data-sort-key="status" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Estado</th>
+                        <th data-sort-key="createdAt" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Fecha</th>
+                        <th data-sort-key="client.name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Cliente</th>
+                        <th data-sort-key="vehicle.brand" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Vehículo</th>
+                        <th data-sort-key="total" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Total</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Acciones</th>
                     </tr></thead><tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
                  </div>
@@ -346,6 +346,7 @@
         let currentEditId = null;
         let chartStatus = null;
         let chartRevenue = null;
+        let orderSortState = { key: 'numericId', direction: 'desc' }; // Estado de ordenamiento de la tabla de órdenes
 
         const ui = {
             tabs: document.querySelectorAll('.tab-btn'),
@@ -407,8 +408,9 @@
                 });
             });
             
-            // --- Lógica del formulario ---
+            // --- Lógica del formulario y tablas ---
             setupFormListeners();
+            setupHistoryTableListeners(); // <-- NUEVO
             resetForm();
         });
 
@@ -465,9 +467,43 @@
         // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
         
         function renderOrdersTable(filter = '') {
-            const filteredOrders = localData.orders.filter(o =>
+            // 1. Filtrado
+            let filteredOrders = localData.orders.filter(o =>
                 `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase().includes(filter.toLowerCase())
             );
+
+            // 2. Ordenamiento
+            const { key, direction } = orderSortState;
+            const getKeyValue = (obj, key) => key.split('.').reduce((o, i) => (o ? o[i] : undefined), obj);
+
+            filteredOrders.sort((a, b) => {
+                const valA = getKeyValue(a, key);
+                const valB = getKeyValue(b, key);
+
+                if (valA === undefined || valA === null) return 1;
+                if (valB === undefined || valB === null) return -1;
+
+                if (key === 'numericId' || key === 'total') {
+                    return direction === 'asc' ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+                }
+                if (key === 'createdAt') {
+                    return direction === 'asc' ? new Date(valA) - new Date(valB) : new Date(valB) - new Date(valA);
+                }
+                
+                return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+            });
+
+            // 3. Indicadores visuales en encabezados
+            document.querySelectorAll('#historial th[data-sort-key]').forEach(th => {
+                th.classList.remove('bg-gray-200');
+                th.textContent = th.textContent.replace(/ (↑|↓)$/, '');
+                if (th.dataset.sortKey === key) {
+                    th.classList.add('bg-gray-200');
+                    th.textContent += ` ${direction === 'asc' ? '↑' : '↓'}`;
+                }
+            });
+
+            // 4. Renderizado
             ui.ordersTable.innerHTML = filteredOrders.map(o => {
                 const statusInfo = statusConfig[o.status] || { class: 'bg-gray-200 text-gray-800' };
                 const dateString = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A';
@@ -770,6 +806,21 @@
             ui.exportBtn.addEventListener('click', exportToCSV);
         }
 
+        function setupHistoryTableListeners() {
+            document.querySelectorAll('#historial th[data-sort-key]').forEach(header => {
+                header.addEventListener('click', () => {
+                    const newKey = header.dataset.sortKey;
+                    if (orderSortState.key === newKey) {
+                        orderSortState.direction = orderSortState.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        orderSortState.key = newKey;
+                        orderSortState.direction = 'desc'; // Por defecto, ordenar descendentemente en nueva columna
+                    }
+                    renderOrdersTable(ui.orderSearch.value);
+                });
+            });
+        }
+
         function createItemRow(item = { qty: 1, description: '', unitPrice: '', price: '' }) {
             const div = document.createElement('div');
             div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row relative';
@@ -795,7 +846,7 @@
                 formatNumberAsCurrency(unitPriceInput, item.unitPrice);
                 unitPriceInput.addEventListener('focus', function() {
                     // Al hacer focus, mostrar solo el número sin formato
-                    const numValue = parseFloat(this.value.replace(/[^\u0000-\uFFFF]/g, '')) || 0;
+                    const numValue = parseFloat(this.value.replace(/[^ -￿]/g, '')) || 0;
                     this.value = numValue;
                 });
                 unitPriceInput.addEventListener('blur', function() {
@@ -808,7 +859,7 @@
                 formatNumberAsCurrency(priceInput, item.price);
                 priceInput.addEventListener('focus', function() {
                     // Al hacer focus, mostrar solo el número sin formato
-                    const numValue = parseFloat(this.value.replace(/[^\u0000-\uFFFF]/g, '')) || 0;
+                    const numValue = parseFloat(this.value.replace(/[^ -￿]/g, '')) || 0;
                     this.value = numValue;
                 });
                 priceInput.addEventListener('blur', function() {
@@ -826,6 +877,16 @@
             ui.submitBtn.textContent = 'Guardar Orden';
             ui.cancelEditBtn.classList.add('hidden');
             ui.orderNumericIdInput.readOnly = false;
+
+            // --- NUEVA LÓGICA PARA FOLIO CONSECUTIVO ---
+            if (localData.orders && localData.orders.length > 0) {
+                const maxId = localData.orders.reduce((max, o) => Math.max(max, Number(o.numericId)), 0);
+                ui.orderNumericIdInput.value = maxId + 1;
+            } else {
+                ui.orderNumericIdInput.value = 1; // Iniciar en 1 si no hay órdenes
+            }
+            // --- FIN DE LA NUEVA LÓGICA ---
+
             updateTotals();
             createItemRow();
             document.getElementById('vehicles-datalist').innerHTML = '';
