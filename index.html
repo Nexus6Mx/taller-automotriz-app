@@ -412,6 +412,25 @@
             setupFormListeners();
             setupHistoryTableListeners(); // <-- NUEVO
             resetForm();
+
+            // --- Lógica para activar pestaña desde URL hash y/o editar orden ---
+            const tabIdFromHash = window.location.hash.substring(1);
+            if (tabIdFromHash) {
+                const tabButton = document.querySelector(`.tab-btn[data-tab="${tabIdFromHash}"]`);
+                if (tabButton) tabButton.click();
+            }
+
+            const editOrderId = sessionStorage.getItem('editOrderId');
+            if (editOrderId) {
+                sessionStorage.removeItem('editOrderId'); // Limpiar para no re-abrir en cada recarga
+                // Asegurarnos que los datos esten cargados antes de intentar editar
+                if (localData.orders.length > 0) {
+                    window.app.editOrder(editOrderId);
+                } else {
+                    // Si los datos no han cargado, esperar y luego editar
+                    document.addEventListener('dataLoaded', () => window.app.editOrder(editOrderId), { once: true });
+                }
+            }
         });
 
         async function loadData() {
@@ -430,6 +449,7 @@
                 
                 updateConnectionStatus(true, 'Conectado al servidor');
                 renderAll();
+                document.dispatchEvent(new Event('dataLoaded'));
             } catch (error) {
                 console.error('Error cargando datos:', error);
                 updateConnectionStatus(false, 'Error de conexión');
@@ -825,7 +845,7 @@
             const div = document.createElement('div');
             div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row relative';
 
-            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
+            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="text" inputmode="decimal" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="text" inputmode="decimal" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
             ui.itemsContainer.appendChild(div);
 
             // Aplicar formato visual a los campos numéricos después de crearlos
@@ -895,7 +915,8 @@
         function updateTotals() {
             let subtotal = 0;
             document.querySelectorAll('.item-row').forEach(row => {
-                subtotal += (parseFloat(row.querySelector('.item-qty').value) || 0) * (parseFloat(row.querySelector('.item-price').value) || 0);
+                const priceValue = row.querySelector('.item-price').value.replace(/[^0-9.-]+/g,"");
+                subtotal += parseFloat(priceValue) || 0;
             });
             const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
             const total = subtotal + iva;
@@ -935,7 +956,7 @@
             const items = Array.from(document.querySelectorAll('.item-row')).map(row => ({
                 qty: parseFloat(row.querySelector('.item-qty').value),
                 description: row.querySelector('.item-desc').value.trim(),
-                price: parseFloat(row.querySelector('.item-price').value)
+                price: parseFloat(row.querySelector('.item-price').value.replace(/[^0-9.-]+/g,""))
             })).filter(item => item.description && item.qty > 0 && item.price >= 0);
 
             if (items.length === 0) {
@@ -992,55 +1013,74 @@
         // --- FUNCIONES GLOBALES (ACCIONES) ---
         
         window.app = {
-            editOrder: (id) => {
-                const order = localData.orders.find(o => o.id == id);
-                if (!order) return;
-                currentEditId = id;
-                ui.orderNumericIdInput.value = order.numericId;
-                ui.orderNumericIdInput.readOnly = true;
-
-                Object.keys(order.client).forEach(key => { if(document.getElementById(`client-${key}`)) document.getElementById(`client-${key}`).value = order.client[key] });
-                Object.keys(order.vehicle).forEach(key => { if(document.getElementById(`vehicle-${key}`)) document.getElementById(`vehicle-${key}`).value = order.vehicle[key] });
-
-                ui.itemsContainer.innerHTML = '';
-                order.items.forEach(item => {
-                    // Crear el item con la nueva estructura incluyendo precio unitario
-                    const itemWithUnitPrice = {
-                        qty: item.qty,
-                        description: item.description,
-                        unitPrice: item.price / item.qty, // Calcular precio unitario
-                        price: item.price
-                    };
-                    createItemRow(itemWithUnitPrice);
-                });
-
-                document.getElementById('order-observations').value = order.observations;
-                document.getElementById('order-status').value = order.status;
-                document.getElementById('vehicle-gas-level').value = order.vehicle.gasLevel;
-                ui.ivaCheckbox.checked = order.ivaApplied;
-
-                // Cargar datos de anticipo si existen
-                if (order.advanceAmount) {
-                    document.getElementById('advance-amount').value = order.advanceAmount;
-                }
-                if (order.advanceDate) {
-                    // Convertir formato de fecha de YYYY-MM-DD a DD/MM/YYYY
-                    const dateParts = order.advanceDate.split('-');
-                    if (dateParts.length === 3) {
-                        const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
-                        document.getElementById('advance-date').value = formattedDate;
+            editOrder: async (id) => {
+                try {
+                    const response = await window.apiService.getOrder(id);
+                    const order = response.data;
+                    if (!order) {
+                        alert('Error: No se pudo encontrar la orden.');
+                        return;
                     }
+
+                    currentEditId = id;
+                    ui.orderNumericIdInput.value = order.numericId;
+                    ui.orderNumericIdInput.readOnly = true;
+
+                    // Rellenar datos del cliente
+                    document.getElementById('client-name').value = order.client.name || '';
+                    document.getElementById('client-cel').value = order.client.cel || '';
+                    document.getElementById('client-address').value = order.client.address || '';
+                    document.getElementById('client-rfc').value = order.client.rfc || '';
+                    document.getElementById('client-email').value = order.client.email || '';
+
+                    // Rellenar datos del vehículo
+                    document.getElementById('vehicle-brand').value = order.vehicle.brand || '';
+                    document.getElementById('vehicle-plates').value = order.vehicle.plates || '';
+                    document.getElementById('vehicle-year').value = order.vehicle.year || '';
+                    document.getElementById('vehicle-km').value = order.vehicle.km || '';
+
+                    ui.itemsContainer.innerHTML = '';
+                    order.items.forEach(item => {
+                        const total_price = parseFloat(item.price) || 0;
+                        const qty = parseFloat(item.qty) || 0;
+                        const unit_price = (qty > 0) ? total_price / qty : 0;
+
+                        const itemData = {
+                            qty: qty,
+                            description: item.description,
+                            unitPrice: unit_price,
+                            price: total_price
+                        };
+                        createItemRow(itemData);
+                    });
+
+                    document.getElementById('order-observations').value = order.observations;
+                    document.getElementById('order-status').value = order.status;
+                    document.getElementById('vehicle-gas-level').value = order.vehicle.gasLevel;
+                    ui.ivaCheckbox.checked = order.ivaApplied;
+
+                    if (order.advanceAmount) {
+                        document.getElementById('advance-amount').value = order.advanceAmount;
+                    }
+                    if (order.advanceDate) {
+                        const dateParts = order.advanceDate.split('-');
+                        if (dateParts.length === 3) {
+                            const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                            document.getElementById('advance-date').value = formattedDate;
+                        }
+                    }
+
+                    updateTotals();
+
+                    ui.formModeTitle.textContent = `Editando Orden #${order.numericId}`;
+                    ui.submitBtn.textContent = `Actualizar Orden`;
+                    ui.cancelEditBtn.classList.remove('hidden');
+
+                    const tabButton = document.querySelector('.tab-btn[data-tab="nueva-orden"]');
+                    if (tabButton) tabButton.click();
+                } catch (error) {
+                    alert('Error al cargar la orden para edición: ' + error.message);
                 }
-
-                updateTotals();
-
-                ui.formModeTitle.textContent = `Editando Orden #${order.numericId}`;
-                ui.submitBtn.textContent = `Actualizar Orden`;
-                ui.cancelEditBtn.classList.remove('hidden');
-
-                // Activar la pestaña
-                const tabButton = document.querySelector('.tab-btn[data-tab="nueva-orden"]');
-                if (tabButton) tabButton.click();
             },
             deleteOrder: async (id, numericId) => {
                 if (confirm(`¿Estás seguro de eliminar la orden #${numericId}?`)) {

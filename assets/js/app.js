@@ -101,6 +101,10 @@ class APIService {
         return await this.request('/orders/read.php');
     }
 
+    async getOrder(orderId) {
+        return await this.request(`/orders/read.php?id=${orderId}`);
+    }
+
     async createOrder(orderData) {
         return await this.request('/orders/create.php', {
             method: 'POST',

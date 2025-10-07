@@ -98,6 +98,8 @@ try {
             $stmt->execute(['user_id' => $user_id]);
             $new_supply_numeric_id = $stmt->fetchColumn();
 
+            $unit_price = ($item->qty > 0) ? $item->price / $item->qty : 0;
+
             $stmt = $db->prepare(
                 "INSERT INTO supplies (user_id, numeric_id, description, price, created_at)
                  VALUES (:user_id, :numeric_id, :description, :price, NOW())"
@@ -106,7 +108,7 @@ try {
                 'user_id' => $user_id,
                 'numeric_id' => $new_supply_numeric_id,
                 'description' => $item_description,
-                'price' => $item->price
+                'price' => $unit_price
             ]);
         }
     }
