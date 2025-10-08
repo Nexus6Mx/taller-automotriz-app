@@ -406,6 +406,11 @@
                     e.target.classList.add('active');
                     ui.tabContents.forEach(tc => tc.classList.remove('active'));
                     document.getElementById(tabId).classList.add('active');
+
+                    // Si se hace clic en "Nueva Orden", reseteamos el formulario para obtener el último ID.
+                    if (tabId === 'nueva-orden') {
+                        resetForm();
+                    }
                 });
             });
             
@@ -995,7 +1000,7 @@
                 return;
             }
 
-            const subtotal = items.reduce((acc, item) => acc + (item.qty * item.price), 0);
+            const subtotal = items.reduce((acc, item) => acc + item.price, 0);
             const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
             const total = subtotal + iva;
 

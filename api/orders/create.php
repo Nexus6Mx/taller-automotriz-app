@@ -18,7 +18,7 @@ if (!$user_id) {
 
 $data = json_decode(file_get_contents("php://input"));
 
-if (empty($data) || empty($data->numeric_id)) {
+if (empty($data)) {
     http_response_code(400);
     echo json_encode(["message" => "Datos incompletos."]);
     exit();
@@ -113,14 +113,19 @@ try {
         }
     }
 
-    // --- 4. INSERTAR ORDEN ---
+    // --- 4. GENERAR NUEVO NUMERIC_ID PARA LA ORDEN ---
+    $stmt_id = $db->prepare("SELECT IFNULL(MAX(numeric_id), 9999) + 1 FROM orders WHERE user_id = :user_id");
+    $stmt_id->execute(['user_id' => $user_id]);
+    $new_order_numeric_id = $stmt_id->fetchColumn();
+
+    // --- 5. INSERTAR ORDEN ---
     $query = "INSERT INTO orders (user_id, numeric_id, client_name, client_cel, client_address, client_rfc, client_email, vehicle_brand, vehicle_plates, vehicle_year, vehicle_km, vehicle_gas_level, observations, status, subtotal, iva, total, iva_applied, created_at, updated_at) 
               VALUES (:user_id, :numeric_id, :client_name, :client_cel, :client_address, :client_rfc, :client_email, :vehicle_brand, :vehicle_plates, :vehicle_year, :vehicle_km, :vehicle_gas_level, :observations, :status, :subtotal, :iva, :total, :iva_applied, NOW(), NOW())";
     
     $stmt = $db->prepare($query);
     $stmt->execute([
         'user_id' => $user_id,
-        'numeric_id' => $data->numeric_id,
+        'numeric_id' => $new_order_numeric_id,
         'client_name' => $client_name,
         'client_cel' => $data->client->cel,
         'client_address' => $data->client->address,
