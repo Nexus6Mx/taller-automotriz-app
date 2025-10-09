@@ -407,8 +407,8 @@
                     ui.tabContents.forEach(tc => tc.classList.remove('active'));
                     document.getElementById(tabId).classList.add('active');
 
-                    // Si se hace clic en "Nueva Orden", reseteamos el formulario para obtener el último ID.
-                    if (tabId === 'nueva-orden') {
+                    // Si se hace clic en "Nueva Orden" y no se está editando una orden, reseteamos el formulario.
+                    if (tabId === 'nueva-orden' && currentEditId === null) {
                         resetForm();
                     }
                 });
