@@ -20,9 +20,16 @@ if (!$user_id) {
 // --- Lectura de Datos ---
 $data = json_decode(file_get_contents("php://input"));
 
-if (!isset($data->id) || !isset($data->numeric_id)) {
+if (!isset($data->id)) {
     http_response_code(400);
-    echo json_encode(["message" => "Faltan datos esenciales (ID o Numeric ID)."]);
+    echo json_encode(["message" => "Falta el ID de la orden."]);
+    exit();
+}
+
+// Solo validar numeric_id si se está actualizando más que solo el estado
+if (count((array)$data) > 2 && !isset($data->numeric_id)) {
+    http_response_code(400);
+    echo json_encode(["message" => "Falta el Numeric ID para la actualización completa."]);
     exit();
 }
 
@@ -31,6 +38,21 @@ $db->beginTransaction();
 
 try {
     // --- 1. Actualizar la tabla principal 'orders' ---
+    // Si solo se está actualizando el estado (solo se envía id y status)
+    if (count((array)$data) <= 2 && isset($data->status)) {
+        $query = "UPDATE orders SET status = :status WHERE id = :id AND user_id = :user_id";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':status', $data->status);
+        $stmt->bindParam(':id', $data->id);
+        $stmt->bindParam(':user_id', $user_id);
+        $stmt->execute();
+        $db->commit();
+        http_response_code(200);
+        echo json_encode(["message" => "Estado de la orden actualizado con éxito.", "status" => $data->status]);
+        exit();
+    }
+
+    // Si se está actualizando toda la orden
     $query = "UPDATE orders SET 
                 numeric_id = :numeric_id,
                 client_name = :client_name,
