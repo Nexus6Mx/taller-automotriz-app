@@ -534,6 +534,8 @@
             ui.ordersTable.innerHTML = filteredOrders.map(o => {
                 const statusInfo = statusConfig[o.status] || { class: 'bg-gray-200 text-gray-800' };
                 const dateString = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A';
+                const advance = Number(o.advanceAmount || o.advance_amount || 0);
+                const netTotal = Math.max(0, Number(o.total) - advance);
                 return `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-bold">${o.numericId}</td>
@@ -545,7 +547,12 @@
                     <td class="px-6 py-4">${dateString}</td>
                     <td class="px-6 py-4">${o.client.name}</td>
                     <td class="px-6 py-4">${o.vehicle.brand} ${o.vehicle.plates}</td>
-                    <td class="px-6 py-4 font-semibold">${formatCurrency(o.total)}</td>
+                    <td class="px-6 py-4">
+                        ${advance > 0 
+                            ? `<div class=\"text-lg font-bold text-gray-900\">${formatCurrency(netTotal)}</div>
+                               <div class=\"text-xs text-gray-600\">Total: ${formatCurrency(o.total)} • Anticipo: ${formatCurrency(advance)}</div>`
+                            : `<div class=\"font-semibold\">${formatCurrency(o.total)}</div>`}
+                    </td>
                     <td class="px-6 py-4 space-x-2">
                         <button onclick="window.app.editOrder('${o.id}')" class="text-indigo-600 hover:text-indigo-900">Editar</button>
                         <button onclick="window.app.printOrder('${o.id}')" class="text-blue-600 hover:text-blue-900">Imprimir</button>
@@ -1024,24 +1031,39 @@
                 subtotal: subtotal,
                 iva: iva,
                 total: total,
-                ivaApplied: ui.ivaCheckbox.checked,
-                advanceAmount: parseFloat(document.getElementById('advance-amount').value) || 0,
-                advanceDate: validateDate(document.getElementById('advance-date').value),
+                ivaApplied: Number(ui.ivaCheckbox.checked),
+                advance_amount: document.getElementById('advance-amount').value ? parseFloat(document.getElementById('advance-amount').value) : null,
+                advance_date: validateDate(document.getElementById('advance-date').value),
                 observations: document.getElementById('order-observations').value,
                 status: document.getElementById('order-status').value
             };
             
             try {
                 if (currentEditId) {
-                    await window.apiService.updateOrder(currentEditId, orderData);
-                    alert('Orden actualizada con éxito.');
+                    const result = await window.apiService.updateOrder(currentEditId, orderData);
+                    if (!result || !result.success) {
+                        console.error('Error en la respuesta:', result);
+                        throw new Error(result?.message || 'No se pudo actualizar la orden');
+                    }
+                    // Esperar un momento para asegurar que la BD se actualice
+                    setTimeout(async () => {
+                        await loadData();
+                        alert('Orden actualizada con éxito.');
+                    }, 500);
                 } else {
-                    await window.apiService.createOrder(orderData);
-                    alert(`Orden #${orderData.numeric_id} guardada. Catálogos actualizados.`);
+                    const result = await window.apiService.createOrder(orderData);
+                    if (!result || !result.success) {
+                        throw new Error(result?.message || 'No se pudo crear la orden');
+                    }
+                    // Esperar un momento para asegurar que la BD se actualice
+                    setTimeout(async () => {
+                        await loadData();
+                        alert(`Orden #${orderData.numeric_id} guardada. Catálogos actualizados.`);
+                    }, 500);
                 }
                 resetForm();
-                await loadData();
             } catch (error) {
+                console.error('Error:', error);
                 alert('Error al guardar la orden: ' + error.message);
             }
         }
@@ -1053,12 +1075,12 @@
                 try {
                     const response = await window.apiService.getOrder(id);
                     const order = response.data;
-                    if (!order) {
+                    if (!order || !order.id) {
                         alert('Error: No se pudo encontrar la orden.');
                         return;
                     }
 
-                    currentEditId = id;
+                    currentEditId = order.id; // Usar el ID real de la orden
                     ui.orderNumericIdInput.value = order.numericId;
                     ui.orderNumericIdInput.readOnly = true;
 

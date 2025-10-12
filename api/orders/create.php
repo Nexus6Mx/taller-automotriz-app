@@ -119,8 +119,8 @@ try {
     $new_order_numeric_id = $stmt_id->fetchColumn();
 
     // --- 5. INSERTAR ORDEN ---
-    $query = "INSERT INTO orders (user_id, numeric_id, client_name, client_cel, client_address, client_rfc, client_email, vehicle_brand, vehicle_plates, vehicle_year, vehicle_km, vehicle_gas_level, observations, status, subtotal, iva, total, iva_applied, created_at, updated_at) 
-              VALUES (:user_id, :numeric_id, :client_name, :client_cel, :client_address, :client_rfc, :client_email, :vehicle_brand, :vehicle_plates, :vehicle_year, :vehicle_km, :vehicle_gas_level, :observations, :status, :subtotal, :iva, :total, :iva_applied, NOW(), NOW())";
+    $query = "INSERT INTO orders (user_id, numeric_id, client_name, client_cel, client_address, client_rfc, client_email, vehicle_brand, vehicle_plates, vehicle_year, vehicle_km, vehicle_gas_level, observations, status, subtotal, iva, total, iva_applied, advance_amount, advance_date, created_at, updated_at) 
+              VALUES (:user_id, :numeric_id, :client_name, :client_cel, :client_address, :client_rfc, :client_email, :vehicle_brand, :vehicle_plates, :vehicle_year, :vehicle_km, :vehicle_gas_level, :observations, :status, :subtotal, :iva, :total, :iva_applied, :advance_amount, :advance_date, NOW(), NOW())";
     
     $stmt = $db->prepare($query);
     $stmt->execute([
@@ -141,7 +141,11 @@ try {
         'subtotal' => $data->subtotal,
         'iva' => $data->iva,
         'total' => $data->total,
-        'iva_applied' => $data->ivaApplied
+        'iva_applied' => isset($data->ivaApplied) ? 
+            (is_bool($data->ivaApplied) ? ($data->ivaApplied ? 1 : 0) : 
+            (is_numeric($data->ivaApplied) ? ($data->ivaApplied ? 1 : 0) : 0)) : 0,
+        'advance_amount' => !empty($data->advance_amount) ? floatval($data->advance_amount) : null,
+        'advance_date' => !empty($data->advance_date) ? $data->advance_date : null
     ]);
     $order_id = $db->lastInsertId();
 
@@ -158,12 +162,12 @@ try {
     }
 
     $db->commit();
-    echo json_encode(["message" => "Orden creada exitosamente y catálogos actualizados.", "order_id" => $order_id]);
+    echo json_encode(["success" => true, "message" => "Orden creada exitosamente y catálogos actualizados.", "order_id" => $order_id]);
 
 } catch (Exception $e) {
     $db->rollBack();
     http_response_code(500);
-    echo json_encode(["message" => "Error al crear orden: " . $e->getMessage()]);
+    echo json_encode(["success" => false, "message" => "Error al crear orden: " . $e->getMessage()]);
 }
 ?>
 

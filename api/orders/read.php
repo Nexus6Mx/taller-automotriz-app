@@ -66,6 +66,11 @@ try {
                 'iva' => floatval($order['iva']),
                 'total' => floatval($order['total']),
                 'ivaApplied' => (bool)$order['iva_applied'],
+                // mantener snake_case por compatibilidad y añadir camelCase para el frontend
+                'advance_amount' => $order['advance_amount'] !== null ? floatval($order['advance_amount']) : null,
+                'advance_date' => $order['advance_date'],
+                'advanceAmount' => $order['advance_amount'] !== null ? floatval($order['advance_amount']) : null,
+                'advanceDate' => $order['advance_date'],
                 'createdAt' => $order['created_at']
             ];
             
@@ -119,6 +124,11 @@ try {
             'iva' => floatval($row['iva']),
             'total' => floatval($row['total']),
             'ivaApplied' => (bool)$row['iva_applied'],
+            // mantener snake_case por compatibilidad y añadir camelCase para el frontend
+            'advance_amount' => isset($row['advance_amount']) ? floatval($row['advance_amount']) : null,
+            'advance_date' => $row['advance_date'],
+            'advanceAmount' => isset($row['advance_amount']) ? floatval($row['advance_amount']) : null,
+            'advanceDate' => $row['advance_date'],
             'createdAt' => $row['created_at']
         ];
         

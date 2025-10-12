@@ -102,7 +102,8 @@ class APIService {
     }
 
     async getOrder(orderId) {
-        return await this.request(`/orders/read.php?id=${orderId}`);
+        const response = await this.request(`/orders/read.php?id=${orderId}`);
+        return response;
     }
 
     async createOrder(orderData) {
@@ -113,10 +114,18 @@ class APIService {
     }
     
     async updateOrder(orderId, orderData) {
-        return await this.request('/orders/update.php', {
+        if (!orderId) {
+            throw new Error('ID de orden no proporcionado');
+        }
+        const data = {
+            ...orderData,
+            id: parseInt(orderId) // Asegurar que el ID sea número y esté presente
+        };
+        const response = await this.request('/orders/update.php', {
             method: 'PUT',
-            body: JSON.stringify({ id: orderId, ...orderData })
+            body: JSON.stringify(data)
         });
+        return response;
     }
 
     async deleteOrder(orderId) {
