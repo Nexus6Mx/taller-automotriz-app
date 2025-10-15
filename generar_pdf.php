@@ -43,9 +43,11 @@ $pdf->Image($data->logoUrl, 10, 8, 33);
 $pdf->SetFont('Arial','B',16);
 $pdf->Cell(0, 7, 'ERR Automotriz', 0, 1, 'C');
 $pdf->SetFont('Arial','B',14);
-$pdf->Cell(0, 7, 'ORDEN DE SERVICIO', 0, 1, 'C');
+$title = (isset($data->status) && $data->status === 'Cotización') ? 'COTIZACIÓN' : 'ORDEN DE SERVICIO';
+$pdf->Cell(0, 7, $title, 0, 1, 'C');
 $pdf->SetFont('Arial','B',12);
-$pdf->Cell(190, 8, '#' . $data->numericId, 1, 1, 'R');
+$label = (isset($data->status) && $data->status === 'Cotización') ? 'Cotización: ' : 'No. de Orden: ';
+$pdf->Cell(190, 8, $label . $data->numericId, 1, 1, 'R');
 $pdf->Ln(5);
 
 // Datos del Cliente y Vehículo
@@ -67,7 +69,8 @@ $pdf->Cell(40, 7, 'IMPORTE', 1, 1, 'C');
 
 $pdf->SetFont('Arial','',10);
 foreach ($data->items as $item) {
-    $importe = $item->qty * $item->price;
+    // En el sistema, price ya representa el importe total de la línea (qty * unit_price)
+    $importe = $item->price;
     $pdf->Cell(20, 7, $item->qty, 1, 0, 'C');
     $pdf->Cell(130, 7, utf8_decode($item->description), 1, 0, 'L');
     $pdf->Cell(40, 7, '$' . number_format($importe, 2), 1, 1, 'R');
@@ -96,7 +99,7 @@ $pdf->Cell(30, 7, 'TOTAL', 1, 0, 'R');
 $pdf->Cell(30, 7, '$' . number_format($data->total, 2), 1, 1, 'R');
 
 // Guardar el archivo PDF en el servidor
-$filename = 'Orden_ERR_' . $data->numericId . '.pdf';
+$filename = ((isset($data->status) && $data->status === 'Cotización') ? 'Cotizacion_ERR_' : 'Orden_ERR_') . $data->numericId . '.pdf';
 if (!file_exists('ordenes')) {
     mkdir('ordenes', 0755, true);
 }

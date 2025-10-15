@@ -96,10 +96,10 @@
                 <td class="logo"><img id="logo-img" src="https://errautomotriz.com/assets/images/err.gif" alt="Logo" style="width: 100%;"></td>
                 <td class="title">
                     <p>ERR Automotriz</p>
-                    <p>ORDEN DE SERVICIO</p>
+                    <p id="doc-title">ORDEN DE SERVICIO</p>
                 </td>
                 <td class="order-id-box">
-                    No. Orden de servicio<br>
+                    <span id="doc-id-label">No. de Orden:</span><br>
                     <span id="numericId"></span>
                 </td>
             </tr>
@@ -199,7 +199,7 @@
             const formatCurrency = (num) => `${parseFloat(num || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
             // Rellenar datos
-            fill('numericId', `#${order.numericId}`);
+            fill('numericId', `${order.numericId}`);
             const date = new Date(order.createdAt);
             fill('createdAt', date.toLocaleDateString('es-MX'));
 
@@ -244,6 +244,20 @@
                 `;
             });
             itemsTbody.innerHTML = itemsHtml;
+
+            // Ajustar encabezado según estatus Cotización
+            try {
+                const titleEl = document.getElementById('doc-title');
+                const idLabelEl = document.getElementById('doc-id-label');
+                if (order.status === 'Cotización') {
+                    titleEl.textContent = 'COTIZACIÓN';
+                    idLabelEl.textContent = 'Cotización:';
+                    document.title = `cotizacion_${order.numericId}`;
+                } else {
+                    titleEl.textContent = 'ORDEN DE SERVICIO';
+                    idLabelEl.textContent = 'No. de Orden:';
+                }
+            } catch (e) {}
 
             // --- MEJORA: Impresión automática ---
             // Se activa la impresión y se cierra la pestaña después de imprimir.

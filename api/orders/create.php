@@ -162,7 +162,13 @@ try {
     }
 
     $db->commit();
-    echo json_encode(["success" => true, "message" => "Orden creada exitosamente y catálogos actualizados.", "order_id" => $order_id]);
+    echo json_encode([
+        "success" => true,
+        "message" => "Orden creada exitosamente y catálogos actualizados.",
+        "order_id" => $order_id,
+        "numeric_id" => (int)$new_order_numeric_id,
+        "status" => $data->status
+    ]);
 
 } catch (Exception $e) {
     $db->rollBack();

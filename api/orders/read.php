@@ -36,6 +36,9 @@ try {
             $items = $stmt_items->fetchAll(PDO::FETCH_ASSOC);
 
             // Mapear los datos a la estructura JSON esperada por el frontend.
+            // Normalizar estatus: renombrar 'En reparación' -> 'Autorizado en reparación'
+            $normalizedStatus = $order['status'] === 'En reparación' ? 'Autorizado en reparación' : $order['status'];
+
             $output = [
                 'id' => $order['id'],
                 'numericId' => (int)$order['numeric_id'],
@@ -61,7 +64,7 @@ try {
                     ];
                 }, $items),
                 'observations' => $order['observations'],
-                'status' => $order['status'],
+                'status' => $normalizedStatus,
                 'subtotal' => floatval($order['subtotal']),
                 'iva' => floatval($order['iva']),
                 'total' => floatval($order['total']),
@@ -100,6 +103,9 @@ try {
             $items = json_decode('[' . $row['items_json'] . ']');
         }
         
+        // Normalizar estatus: renombrar 'En reparación' -> 'Autorizado en reparación'
+        $normalizedStatus = $row['status'] === 'En reparación' ? 'Autorizado en reparación' : $row['status'];
+
         $order = [
             'id' => $row['id'],
             'numericId' => (int)$row['numeric_id'],
@@ -119,7 +125,7 @@ try {
             ],
             'items' => $items,
             'observations' => $row['observations'],
-            'status' => $row['status'],
+            'status' => $normalizedStatus,
             'subtotal' => floatval($row['subtotal']),
             'iva' => floatval($row['iva']),
             'total' => floatval($row['total']),

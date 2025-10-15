@@ -37,17 +37,32 @@ class APIService {
 
         try {
             const response = await fetch(url, config);
-            const data = await response.json();
+            const contentType = response.headers.get('content-type') || '';
+            let data;
+            if (contentType.includes('application/json')) {
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    // Fallback: body might not be valid JSON although header says so
+                    const text = await response.text();
+                    data = { message: text };
+                }
+            } else {
+                const text = await response.text();
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    data = { message: text };
+                }
+            }
 
             if (!response.ok) {
-                // Si la respuesta no es exitosa, lanzamos un error con el mensaje de la API.
-                throw new Error(data.message || 'Ocurrió un error en la solicitud.');
+                throw new Error((data && data.message) ? data.message : `Error HTTP ${response.status}`);
             }
 
             return data;
         } catch (error) {
             console.error('Error en APIService:', error);
-            // Re-lanzamos el error para que pueda ser capturado por el código que llamó a la función.
             throw error;
         }
     }
@@ -132,6 +147,31 @@ class APIService {
         return await this.request('/orders/delete.php', {
             method: 'DELETE',
             body: JSON.stringify({ id: orderId })
+        });
+    }
+
+    async sendOrderEmail(orderId) {
+        return await this.request('/orders/send_email.php', {
+            method: 'POST',
+            body: JSON.stringify({ id: orderId })
+        });
+    }
+
+    async sendInvoiceEmail(orderId) {
+        return await this.request('/orders/send_invoice.php', {
+            method: 'POST',
+            body: JSON.stringify({ id: orderId })
+        });
+    }
+
+    async getInvoiceRecipients() {
+        return await this.request('/orders/invoice_recipients.php');
+    }
+
+    async updateInvoiceRecipients(emails) {
+        return await this.request('/orders/invoice_recipients.php', {
+            method: 'PUT',
+            body: JSON.stringify({ emails })
         });
     }
 
