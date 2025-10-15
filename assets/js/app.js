@@ -75,11 +75,12 @@ class APIService {
             body: JSON.stringify({ email, password })
         });
         
-        // Almacenar el token y datos del usuario en localStorage
+    // Almacenar el token y datos del usuario en localStorage
         authToken = data.token;
         localStorage.setItem('authToken', authToken);
         localStorage.setItem('userEmail', data.email);
         localStorage.setItem('userId', data.user_id);
+    if (data.role) localStorage.setItem('userRole', data.role);
         
         return data;
     }
@@ -207,3 +208,19 @@ class APIService {
 
 // Instancia global del servicio para que esté disponible en toda la aplicación
 window.apiService = new APIService();
+
+// UI helpers para mostrar email y controlar el acceso a Configuración
+document.addEventListener('DOMContentLoaded', ()=>{
+    const email = localStorage.getItem('userEmail');
+    const role = localStorage.getItem('userRole');
+    const emailEl = document.getElementById('user-email');
+    if (emailEl && email) emailEl.textContent = email;
+    const cfgBtn = document.getElementById('config-btn');
+    if (cfgBtn) {
+        if (role !== 'Administrador') {
+            cfgBtn.style.display = 'none';
+        } else {
+            cfgBtn.style.display = '';
+        }
+    }
+});

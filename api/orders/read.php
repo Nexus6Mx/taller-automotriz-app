@@ -8,11 +8,21 @@ $db = $database->getConnection();
 
 $headers = getallheaders();
 $token = isset($headers['Authorization']) ? str_replace('Bearer ', '', $headers['Authorization']) : '';
-$user_id = verifyToken($db, $token);
+$user = verifyToken($db, $token);
 
-if (!$user_id) {
+if (!$user) {
     http_response_code(401);
     echo json_encode(["message" => "Acceso no autorizado."]);
+    exit();
+}
+
+$user_id = $user['id'];
+$user_role = isset($user['role']) ? $user['role'] : 'Operador';
+$user_active = isset($user['active']) ? $user['active'] : true;
+
+if (!$user_active) {
+    http_response_code(403);
+    echo json_encode(["message" => "Usuario desactivado."]);
     exit();
 }
 
@@ -87,10 +97,16 @@ try {
     }
 
     // Si no se proporciona ID, se ejecuta la lógica original para obtener todas las órdenes.
-    $query = "SELECT o.*, GROUP_CONCAT(JSON_OBJECT('qty', oi.qty, 'description', oi.description, 'price', oi.price)) as items_json FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id WHERE o.user_id = :user_id GROUP BY o.id ORDER BY o.created_at DESC";
-    
-    $stmt = $db->prepare($query);
-    $stmt->bindParam(':user_id', $user_id);
+    // Permisos: Administrador y Operador ven todas las órdenes; Consulta sólo las propias.
+    if (in_array($user_role, ['Administrador', 'Operador'])) {
+        $query = "SELECT o.*, GROUP_CONCAT(JSON_OBJECT('qty', oi.qty, 'description', oi.description, 'price', oi.price)) as items_json FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id GROUP BY o.id ORDER BY o.created_at DESC";
+        $stmt = $db->prepare($query);
+    } else {
+        // role Consulta u otros: sólo ver órdenes creadas por el usuario
+        $query = "SELECT o.*, GROUP_CONCAT(JSON_OBJECT('qty', oi.qty, 'description', oi.description, 'price', oi.price)) as items_json FROM orders o LEFT JOIN order_items oi ON o.id = oi.order_id WHERE o.user_id = :user_id GROUP BY o.id ORDER BY o.created_at DESC";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':user_id', $user_id);
+    }
 
     
     $stmt->execute();

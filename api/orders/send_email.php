@@ -48,12 +48,19 @@ if (function_exists('getallheaders')) {
 }
 $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
 $token = $authHeader ? str_replace('Bearer ', '', $authHeader) : '';
-$user_id = verifyToken($db, $token);
 
-if (!$user_id) {
-    http_response_code(401);
-    echo json_encode(['success' => false, 'message' => 'Token de autenticación requerido']);
-    exit;
+ $user = verifyToken($db, $token);
+ if (!$user) {
+     http_response_code(401);
+     echo json_encode(["message" => "Acceso no autorizado."]);
+     exit();
+ }
+ $user_id = $user['id'];
+ $user_active = isset($user['active']) ? $user['active'] : true;
+ if (!$user_active) {
+     http_response_code(403);
+     echo json_encode(["message"=>"Usuario desactivado."]);
+     exit();
 }
 
 // Obtener datos de la solicitud desde la misma lectura

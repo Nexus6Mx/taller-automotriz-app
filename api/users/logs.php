@@ -9,31 +9,29 @@ $db = $database->getConnection();
 $headers = getallheaders();
 $token = isset($headers['Authorization']) ? str_replace('Bearer ', '', $headers['Authorization']) : '';
 $user = verifyToken($db, $token);
+
 if (!$user) {
     http_response_code(401);
     echo json_encode(["message" => "Acceso no autorizado."]);
     exit();
 }
-$user_id = $user['id'];
-$user_active = isset($user['active']) ? $user['active'] : true;
-if (!$user_active) {
+
+// Sólo administradores pueden ver logs
+if ($user['role'] !== 'Administrador') {
     http_response_code(403);
-    echo json_encode(["message"=>"Usuario desactivado."]);
+    echo json_encode(["message" => "Permisos insuficientes."]);
     exit();
 }
 
 try {
-    $query = "SELECT * FROM clients WHERE user_id = :user_id ORDER BY name ASC";
+    $query = "SELECT a.*, u.email as actor_email FROM audit_logs a LEFT JOIN users u ON a.actor_user_id = u.id ORDER BY a.created_at DESC LIMIT 100";
     $stmt = $db->prepare($query);
-    $stmt->bindParam(':user_id', $user_id);
     $stmt->execute();
-    
-    $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    echo json_encode(['data' => $clients]);
-
+    $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo json_encode(['data'=>$logs], JSON_PRETTY_PRINT);
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(["message" => "Error al obtener los clientes: " . $e->getMessage()]);
+    echo json_encode(["message"=>"Error: " . $e->getMessage()]);
 }
+
 ?>

@@ -3,6 +3,7 @@
 include_once '../utils/cors.php';
 
 include_once '../config/database.php';
+include_once '../users/log_audit.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -17,7 +18,7 @@ if (empty($data->email) || empty($data->password)) {
 
 try {
     // 1. Buscar al usuario por email
-    $query = "SELECT id, email, password_hash FROM users WHERE email = :email";
+    $query = "SELECT id, email, password_hash, failed_attempts, locked_until, active FROM users WHERE email = :email";
     $stmt = $db->prepare($query);
     $stmt->bindParam(":email", $data->email);
     $stmt->execute();
@@ -30,15 +31,48 @@ try {
 
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // 2. Verificar que la contraseña coincida con el hash almacenado
-    if (!password_verify($data->password, $user['password_hash'])) {
-        http_response_code(401); // No autorizado
-        echo json_encode(["message" => "Credenciales incorrectas."]);
+    // Verificar si el usuario está activo
+    if (isset($user['active']) && !$user['active']) {
+        http_response_code(403);
+        echo json_encode(["message" => "Usuario desactivado."]);
         exit();
     }
 
-    // 3. Actualizar la fecha del último inicio de sesión
-    $update_query = "UPDATE users SET last_login = NOW() WHERE id = :id";
+    // Verificar bloqueo por intentos fallidos
+    if (!empty($user['locked_until']) && strtotime($user['locked_until']) > time()) {
+        http_response_code(423); // Locked
+        echo json_encode(["message" => "Cuenta temporalmente bloqueada. Intenta más tarde."]);
+        log_audit($db, $user['id'], 'login_blocked', 'users', $user['id'], null);
+        exit();
+    }
+
+    // 2. Verificar que la contraseña coincida con el hash almacenado
+    if (!password_verify($data->password, $user['password_hash'])) {
+        // Incrementar failed_attempts
+        $inc = $db->prepare("UPDATE users SET failed_attempts = failed_attempts + 1 WHERE id = :id");
+        $inc->bindParam(':id', $user['id']);
+        $inc->execute();
+
+        // Si supera umbral (ej. 5), bloquear por 15 minutos
+        $check = $db->prepare("SELECT failed_attempts FROM users WHERE id = :id");
+        $check->bindParam(':id', $user['id']);
+        $check->execute();
+        $count = (int)$check->fetchColumn();
+        if ($count >= 5) {
+            $lock = $db->prepare("UPDATE users SET locked_until = DATE_ADD(NOW(), INTERVAL 15 MINUTE), failed_attempts = 0 WHERE id = :id");
+            $lock->bindParam(':id', $user['id']);
+            $lock->execute();
+            log_audit($db, $user['id'], 'account_locked', 'users', $user['id'], null);
+        }
+
+        http_response_code(401); // No autorizado
+        echo json_encode(["message" => "Credenciales incorrectas."]);
+        log_audit($db, $user['id'], 'login_failed', 'users', $user['id'], null);
+        exit();
+    }
+
+    // 3. Resetear failed_attempts y actualizar la fecha del último inicio de sesión
+    $update_query = "UPDATE users SET last_login = NOW(), failed_attempts = 0, locked_until = NULL WHERE id = :id";
     $update_stmt = $db->prepare($update_query);
     $update_stmt->bindParam(":id", $user['id']);
     $update_stmt->execute();
@@ -61,13 +95,18 @@ try {
     $session_stmt->bindParam(":expires", $expires);
     $session_stmt->execute();
 
+    // Registrar login exitoso en logs
+    log_audit($db, $user['id'], 'login_success', 'users', $user['id'], null);
+
     // 5. Enviar respuesta exitosa
     http_response_code(200);
     echo json_encode([
         "message" => "Inicio de sesión exitoso.",
         "token" => $token,
         "user_id" => $user['id'],
-        "email" => $user['email']
+        "email" => $user['email'],
+        "role" => $user['role'] ?? 'Operador',
+        "active" => isset($user['active']) ? (int)$user['active'] : 1
     ]);
 
 } catch (Exception $e) {
