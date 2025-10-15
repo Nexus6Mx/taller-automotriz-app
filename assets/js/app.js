@@ -241,9 +241,29 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if (emailEl && email) emailEl.textContent = email;
     if (cfgBtn) {
         // Normalizar role para comparación robusta
-        const normalizedRole = role ? String(role).trim().toLowerCase() : '';
+        const normalizedRole = role ? String(role).trim().toLowerCase() : null;
         console.debug('UI role check:', { role, normalizedRole, authToken });
-        if (normalizedRole !== 'administrador' && !normalizedRole.startsWith('admin')) {
+
+        // Si no sabemos el role (p. ej. falta en localStorage), mostrar el botón para evitar parpadeo
+        // y validar permisos solo cuando el usuario haga clic.
+        if (normalizedRole === null) {
+            cfgBtn.style.display = '';
+            // Enlazar verificación bajo demanda (solo una vez)
+            if (!cfgBtn.dataset.lazyCheck) {
+                cfgBtn.dataset.lazyCheck = '1';
+                cfgBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        // Intentar leer usuarios (endpoint admin-only). Si OK, redirigir.
+                        await window.apiService.request('/users/read.php');
+                        window.location.href = '/configuracion.html';
+                    } catch (err) {
+                        alert('No tienes permisos para acceder a Configuración.');
+                        console.warn('Acceso configuracion denegado:', err);
+                    }
+                });
+            }
+        } else if (normalizedRole !== 'administrador' && !normalizedRole.startsWith('admin')) {
             cfgBtn.style.display = 'none';
         } else {
             cfgBtn.style.display = '';
