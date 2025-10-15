@@ -38,9 +38,28 @@
             const row = e.target.closest('tr');
             const email = row.children[1].textContent.trim();
             const role = prompt('Rol (Administrador, Operador, Consulta):', row.children[2].textContent.trim());
-            const activo = prompt('Activo? (1=Si,0=No):', row.children[3].textContent.trim());
+            // Determinar valor por defecto como 1/0 según 'Sí'/'No'
+            const currentActiveText = row.children[3].textContent.trim().toLowerCase();
+            const defaultActiveNumeric = currentActiveText.startsWith('s') ? '1' : '0';
+            const activoInput = prompt('Activo? (1=Si,0=No):', defaultActiveNumeric);
             const newPwd = prompt('Nueva contraseña (opcional, dejar vacío para no cambiar):', '');
-            const payload = { id, role, active: Number(activo)===1 };
+            // Parseo robusto de activo
+            let activeBool;
+            if (activoInput === null || activoInput === '') {
+                activeBool = defaultActiveNumeric === '1';
+            } else {
+                const s = String(activoInput).trim().toLowerCase();
+                if (s === '1' || s === 'si' || s === 'sí' || s === 'true' || s === 'yes') {
+                    activeBool = true;
+                } else if (s === '0' || s === 'no' || s === 'false') {
+                    activeBool = false;
+                } else {
+                    activeBool = Number(s) === 1; // fallback
+                }
+            }
+            const payload = { id };
+            if (role) payload.role = role;
+            payload.active = activeBool;
             if (newPwd) payload.password = newPwd;
             const res = await api('/api/users/update.php', {method:'POST', body: JSON.stringify(payload)});
             if (res) alert(res.message || 'Actualizado');

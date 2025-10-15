@@ -64,7 +64,10 @@ try {
     if (!empty($data->email)) $stmt->bindParam(':email', $data->email);
     if (!empty($data->password)) { $hash = password_hash($data->password, PASSWORD_BCRYPT); $stmt->bindParam(':password', $hash); }
     if (isset($data->role)) $stmt->bindParam(':role', $data->role);
-    if (isset($data->active)) $a = $data->active ? 1 : 0; $stmt->bindParam(':active', $a);
+    if (isset($data->active)) {
+        $a = $data->active ? 1 : 0;
+        $stmt->bindParam(':active', $a, PDO::PARAM_INT);
+    }
     $stmt->bindParam(':id', $data->id);
 
     if ($stmt->execute()) {
