@@ -81,8 +81,8 @@ try {
     $token = bin2hex(random_bytes(32));
     $expires = date('Y-m-d H:i:s', strtotime('+7 days'));
 
-    // (Opcional pero recomendado) Limpiar sesiones antiguas para este usuario
-    $clean_query = "DELETE FROM sessions WHERE user_id = :user_id";
+    // Limpiar SOLO sesiones expiradas para este usuario (permite múltiples sesiones actuales)
+    $clean_query = "DELETE FROM sessions WHERE user_id = :user_id AND expires_at < NOW()";
     $clean_stmt = $db->prepare($clean_query);
     $clean_stmt->bindParam(":user_id", $user['id']);
     $clean_stmt->execute();
@@ -98,7 +98,19 @@ try {
     // Registrar login exitoso en logs
     log_audit($db, $user['id'], 'login_success', 'users', $user['id'], null);
 
-    // 5. Enviar respuesta exitosa
+    // 5. Establecer cookie segura con el token para que el navegador la envíe automáticamente
+    // Nota: requiere HTTPS para secure=true en producción
+    $cookieOptions = [
+        'expires' => strtotime($expires),
+        'path' => '/',
+        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ];
+    // PHP 7.3+ soporta opciones como array
+    @setcookie('authToken', $token, $cookieOptions);
+
+    // 6. Enviar respuesta exitosa
     http_response_code(200);
     echo json_encode([
         "message" => "Inicio de sesión exitoso.",

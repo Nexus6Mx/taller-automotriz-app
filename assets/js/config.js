@@ -14,9 +14,24 @@
     }
 
     async function api(path, opts={}){
-        const res = await fetch(path, Object.assign({ headers: headers() }, opts));
+        const res = await fetch(path, Object.assign({ headers: headers(), credentials: 'include' }, opts));
         if (res.status === 401 || res.status === 403) {
-            alert('No autorizado. Asegúrate de iniciar sesión con una cuenta con permisos.');
+            let msg = 'No autorizado. Asegúrate de iniciar sesión con una cuenta con permisos.';
+            let body = null;
+            try { body = await res.json(); if (body && body.message) msg = body.message; } catch(_) {}
+
+            // Retry once adding token in query string as fallback if header was stripped
+            if (!opts.__retried && res.status === 401) {
+                const t = localStorage.getItem('authToken');
+                if (t) {
+                    const url = new URL(path, window.location.origin);
+                    url.searchParams.set('token', t);
+                    const res2 = await fetch(url.toString(), Object.assign({ headers: headers(), credentials: 'include' }, { __retried: true }));
+                    if (res2.ok) return res2.json();
+                }
+            }
+
+            alert(msg);
             return null;
         }
         return res.json();

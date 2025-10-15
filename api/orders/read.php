@@ -6,8 +6,19 @@ include_once '../auth/verify.php';
 $database = new Database();
 $db = $database->getConnection();
 
-$headers = getallheaders();
-$token = isset($headers['Authorization']) ? str_replace('Bearer ', '', $headers['Authorization']) : '';
+$headers = [];
+if (function_exists('getallheaders')) {
+    $headers = getallheaders();
+} else {
+    foreach ($_SERVER as $name => $value) {
+        if (substr($name, 0, 5) == 'HTTP_') {
+            $key = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+            $headers[$key] = $value;
+        }
+    }
+}
+$authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+$token = $authHeader ? str_replace('Bearer ', '', $authHeader) : '';
 $user = verifyToken($db, $token);
 
 if (!$user) {
