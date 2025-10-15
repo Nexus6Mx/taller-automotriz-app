@@ -2,6 +2,7 @@
 include_once '../utils/cors.php';
 include_once '../config/database.php';
 include_once '../auth/verify.php';
+require_once '../users/log_audit.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -15,10 +16,18 @@ if (!$user) {
     exit();
 }
 $user_id = $user['id'];
+$user_role = isset($user['role']) ? $user['role'] : 'Operador';
 $user_active = isset($user['active']) ? $user['active'] : true;
 if (!$user_active) {
     http_response_code(403);
     echo json_encode(["message"=>"Usuario desactivado."]);
+    exit();
+}
+
+// Permisos: solo Administrador y Operador pueden crear órdenes
+if (!in_array($user_role, ['Administrador', 'Operador'])) {
+    http_response_code(403);
+    echo json_encode(["message" => "No tiene permisos para crear órdenes."]);
     exit();
 }
 
@@ -175,6 +184,12 @@ try {
         "numeric_id" => (int)$new_order_numeric_id,
         "status" => $data->status
     ]);
+
+    // Audit
+    log_audit($db, $user_id, 'order_created', 'order', $order_id, json_encode([
+        'numeric_id' => (int)$new_order_numeric_id,
+        'status' => $data->status
+    ]));
 
 } catch (Exception $e) {
     $db->rollBack();

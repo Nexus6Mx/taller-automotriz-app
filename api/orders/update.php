@@ -2,6 +2,7 @@
 include_once '../utils/cors.php';
 include_once '../config/database.php';
 include_once '../auth/verify.php';
+require_once '../users/log_audit.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -16,10 +17,18 @@ if (!$user) {
     exit();
 }
 $user_id = $user['id'];
+$user_role = isset($user['role']) ? $user['role'] : 'Operador';
 $user_active = isset($user['active']) ? $user['active'] : true;
 if (!$user_active) {
     http_response_code(403);
     echo json_encode(["success"=>false, "message"=>"Usuario desactivado."]);
+    exit();
+}
+
+// Permisos: solo Administrador y Operador pueden actualizar órdenes
+if (!in_array($user_role, ['Administrador', 'Operador'])) {
+    http_response_code(403);
+    echo json_encode(["success" => false, "message" => "No tiene permisos para actualizar órdenes."]);
     exit();
 }
 
@@ -57,28 +66,30 @@ $db->beginTransaction();
 
 try {
     // Verificar que la orden exista antes de intentar actualizarla
-    $check_query = "SELECT id FROM orders WHERE id = :id AND user_id = :user_id";
+    // Admin/Operador pueden actualizar cualquier orden; si se desea restringir por usuario, descomentar AND user_id = :user_id
+    $check_query = "SELECT id, user_id FROM orders WHERE id = :id";
     $check_stmt = $db->prepare($check_query);
     $check_stmt->bindValue(':id', $data->id, PDO::PARAM_INT);
-    $check_stmt->bindValue(':user_id', $user_id, PDO::PARAM_INT);
     $check_stmt->execute();
-    
-    if (!$check_stmt->fetch()) {
+
+    $order_row = $check_stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$order_row) {
         throw new Exception("No se encontró la orden con ID: " . $data->id);
     }
 
     // --- 1. Actualizar la tabla principal 'orders' ---
     // Si solo se está actualizando el estado (solo se envía id y status)
     if (count((array)$data) <= 2 && isset($data->status)) {
-        $query = "UPDATE orders SET status = :status WHERE id = :id AND user_id = :user_id";
+        $query = "UPDATE orders SET status = :status WHERE id = :id";
         $stmt = $db->prepare($query);
         $stmt->bindParam(':status', $data->status);
         $stmt->bindParam(':id', $data->id);
-        $stmt->bindParam(':user_id', $user_id);
         $stmt->execute();
     $db->commit();
     http_response_code(200);
     echo json_encode(["success" => true, "message" => "Estado de la orden actualizado con éxito.", "status" => $data->status]);
+        // Audit status change
+        log_audit($db, $user_id, 'order_status_updated', 'order', $data->id, json_encode(['status' => $data->status]));
         exit();
     }
 
@@ -103,7 +114,7 @@ try {
                                 iva_applied = :iva_applied,
                                 advance_amount = :advance_amount,
                                 advance_date = :advance_date
-                            WHERE id = :id AND user_id = :user_id";
+                            WHERE id = :id";
 
     $stmt = $db->prepare($query);
 
@@ -142,7 +153,6 @@ try {
     $stmt->bindValue(':advance_date', $advance_date, $advance_date === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
     
     $stmt->bindValue(':id', $data->id);
-    $stmt->bindValue(':user_id', $user_id);
 
     if (!$stmt->execute()) {
         $err = $stmt->errorInfo();
@@ -177,6 +187,8 @@ try {
     
     http_response_code(200);
     echo json_encode(["success" => true, "message" => "Orden actualizada con éxito."]);
+    // Audit full update
+    log_audit($db, $user_id, 'order_updated', 'order', $data->id, null);
 
 } catch (Exception $e) {
     // --- Si algo falló, revertir todos los cambios ---

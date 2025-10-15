@@ -31,10 +31,17 @@ try {
 
     // Si se proporciona un ID, obtener los detalles de una sola orden.
     if ($order_id) {
-        $query_order = "SELECT * FROM orders WHERE id = :order_id AND user_id = :user_id";
-        $stmt_order = $db->prepare($query_order);
-        $stmt_order->bindParam(':order_id', $order_id, PDO::PARAM_INT);
-        $stmt_order->bindParam(':user_id', $user_id);
+        // Admin y Operador pueden ver cualquier orden; Consulta sólo las propias
+        if (in_array($user_role, ['Administrador', 'Operador'])) {
+            $query_order = "SELECT * FROM orders WHERE id = :order_id";
+            $stmt_order = $db->prepare($query_order);
+            $stmt_order->bindParam(':order_id', $order_id, PDO::PARAM_INT);
+        } else {
+            $query_order = "SELECT * FROM orders WHERE id = :order_id AND user_id = :user_id";
+            $stmt_order = $db->prepare($query_order);
+            $stmt_order->bindParam(':order_id', $order_id, PDO::PARAM_INT);
+            $stmt_order->bindParam(':user_id', $user_id);
+        }
         $stmt_order->execute();
         $order = $stmt_order->fetch(PDO::FETCH_ASSOC);
 

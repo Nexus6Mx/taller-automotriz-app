@@ -15,5 +15,9 @@ if (!$user) {
     echo json_encode(["message" => "Acceso no autorizado."]);
     exit();
 }
+http_response_code(200);
+// Devolver el objeto de usuario directamente para facilitar el consumo desde el frontend
+echo json_encode($user);
 
-echo json_encode([ 'data' => $user ]);
+exit();
+

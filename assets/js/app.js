@@ -210,14 +210,40 @@ class APIService {
 window.apiService = new APIService();
 
 // UI helpers para mostrar email y controlar el acceso a Configuración
-document.addEventListener('DOMContentLoaded', ()=>{
-    const email = localStorage.getItem('userEmail');
-    const role = localStorage.getItem('userRole');
+document.addEventListener('DOMContentLoaded', async ()=>{
     const emailEl = document.getElementById('user-email');
-    if (emailEl && email) emailEl.textContent = email;
     const cfgBtn = document.getElementById('config-btn');
+
+    let email = localStorage.getItem('userEmail');
+    let role = localStorage.getItem('userRole');
+
+    // Si no tenemos role en localStorage pero sí tenemos token, pedir /auth/me.php
+    if (!role && authToken) {
+        try {
+            const me = await window.apiService.request('/auth/me.php');
+            if (me) {
+                if (me.email) {
+                    localStorage.setItem('userEmail', me.email);
+                    email = me.email;
+                }
+                if (me.role) {
+                    localStorage.setItem('userRole', me.role);
+                    role = me.role;
+                }
+                if (me.user_id) localStorage.setItem('userId', me.user_id);
+            }
+        } catch (e) {
+            // ignore: if /auth/me fails, keep using localStorage values (if any)
+            console.warn('No se pudo obtener info de usuario:', e);
+        }
+    }
+
+    if (emailEl && email) emailEl.textContent = email;
     if (cfgBtn) {
-        if (role !== 'Administrador') {
+        // Normalizar role para comparación robusta
+        const normalizedRole = role ? String(role).trim().toLowerCase() : '';
+        console.debug('UI role check:', { role, normalizedRole, authToken });
+        if (normalizedRole !== 'administrador' && !normalizedRole.startsWith('admin')) {
             cfgBtn.style.display = 'none';
         } else {
             cfgBtn.style.display = '';

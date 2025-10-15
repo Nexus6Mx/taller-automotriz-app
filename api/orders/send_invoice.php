@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 require_once '../config/database.php';
 require_once '../utils/cors.php';
 require_once '../auth/verify.php';
+require_once '../users/log_audit.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -55,11 +56,19 @@ $token = $authHeader ? str_replace('Bearer ', '', $authHeader) : '';
      exit();
  }
  $user_id = $user['id'];
+ $user_role = isset($user['role']) ? $user['role'] : 'Operador';
  $user_active = isset($user['active']) ? $user['active'] : true;
  if (!$user_active) {
      http_response_code(403);
      echo json_encode(["message"=>"Usuario desactivado."]);
      exit();
+}
+
+// Permisos: solo Administrador y Operador pueden solicitar facturación
+if (!in_array($user_role, ['Administrador', 'Operador'])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'No tiene permisos para solicitar facturación.']);
+    exit;
 }
 
 $data = json_decode($rawInput);
@@ -72,8 +81,8 @@ if (!$data || !isset($data->id)) {
 $orderId = $data->id;
 
 try {
-    $stmt = $db->prepare("SELECT * FROM orders WHERE id = :id AND user_id = :user_id");
-    $stmt->execute(['id' => $orderId, 'user_id' => $user_id]);
+    $stmt = $db->prepare("SELECT * FROM orders WHERE id = :id");
+    $stmt->execute(['id' => $orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$order) {
@@ -212,6 +221,8 @@ try {
             $mail->send();
             log_send_invoice('PHPMailer send success');
             echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada']);
+            log_send_invoice('Audit: order_invoice_requested');
+            log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
             exit;
         } catch(Exception $e){
             log_send_invoice('PHPMailer error: ' . $e->getMessage());
@@ -249,6 +260,7 @@ try {
 
     if ($allSent){
         echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada']);
+        log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
     } else {
         http_response_code(500);
         echo json_encode(['success'=>false,'message'=>'Error enviando algunas solicitudes de facturación']);

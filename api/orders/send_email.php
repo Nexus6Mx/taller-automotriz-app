@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 require_once '../config/database.php';
 require_once '../utils/cors.php';
 require_once '../auth/verify.php';
+require_once '../users/log_audit.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -56,11 +57,19 @@ $token = $authHeader ? str_replace('Bearer ', '', $authHeader) : '';
      exit();
  }
  $user_id = $user['id'];
+ $user_role = isset($user['role']) ? $user['role'] : 'Operador';
  $user_active = isset($user['active']) ? $user['active'] : true;
  if (!$user_active) {
      http_response_code(403);
      echo json_encode(["message"=>"Usuario desactivado."]);
      exit();
+}
+
+// Permisos: solo Administrador y Operador pueden enviar correos de orden
+if (!in_array($user_role, ['Administrador', 'Operador'])) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'No tiene permisos para enviar correos de órdenes.']);
+    exit;
 }
 
 // Obtener datos de la solicitud desde la misma lectura
@@ -76,10 +85,9 @@ $orderId = $data->id;
 
 try {
     // Obtener la orden
-    $query = "SELECT * FROM orders WHERE id = :id AND user_id = :user_id";
+    $query = "SELECT * FROM orders WHERE id = :id";
     $stmt = $db->prepare($query);
     $stmt->bindParam(':id', $orderId);
-    $stmt->bindParam(':user_id', $user_id);
     $stmt->execute();
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -270,6 +278,7 @@ try {
             $mail->send();
             log_send_email('PHPMailer send() returned success');
             echo json_encode(['success' => true, 'message' => 'Correo enviado exitosamente']);
+            log_audit($db, $user_id, 'order_email_sent', 'order', $orderId, null);
         } catch (Exception $e) {
             log_send_email('PHPMailer error: ' . $e->getMessage() . ' | ErrorInfo: ' . $mail->ErrorInfo);
             http_response_code(500);
@@ -302,6 +311,7 @@ try {
         log_send_email('mail() result: ' . ($mailResult ? 'true' : 'false'));
         if ($mailResult) {
             echo json_encode(['success' => true, 'message' => 'Correo enviado exitosamente']);
+            log_audit($db, $user_id, 'order_email_sent', 'order', $orderId, null);
         } else {
             http_response_code(500);
             echo json_encode(['success' => false, 'message' => 'Error al enviar el correo']);

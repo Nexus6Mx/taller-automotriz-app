@@ -68,29 +68,19 @@ try {
     exit;
 }
 
-// Determine admin user id: we assume the admin account is admin@errautomotriz.online
+// Determine admin user id by role
 $adminUserId = null;
 try {
-    $stmt = $db->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-    $stmt->execute(['email' => 'admin@errautomotriz.online']);
+    $stmt = $db->prepare("SELECT id FROM users WHERE role = 'Administrador' ORDER BY id ASC LIMIT 1");
+    $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($row) {
-        $adminUserId = (int)$row['id'];
-    }
+    if ($row) $adminUserId = (int)$row['id'];
 } catch (Exception $e) {
     // ignore; will fall back to current user
 }
 
-// Only admin can manage recipients. Non-admins can only read (GET) to know if configured, but returns the admin list.
-$isAdmin = false;
-try {
-    $stmtU = $db->prepare('SELECT email FROM users WHERE id = :id');
-    $stmtU->execute(['id' => $user_id]);
-    $u = $stmtU->fetch(PDO::FETCH_ASSOC);
-    $isAdmin = $u && strtolower($u['email']) === 'admin@errautomotriz.online';
-} catch (Exception $e) {
-    $isAdmin = false;
-}
+$user_role = isset($user['role']) ? $user['role'] : 'Operador';
+$isAdmin = ($user_role === 'Administrador');
 
 if ($method === 'GET') {
     // Always read from the admin list if available; else fallback to current user
@@ -151,8 +141,8 @@ if ($method === 'POST' || $method === 'PUT') {
     try {
         $db->beginTransaction();
 
-        // Write to admin user list (shared for whole account)
-        $targetUserId = $adminUserId ?: $user_id;
+    // Write to admin user list (shared for whole account); if no admin found, use current user
+    $targetUserId = $adminUserId ?: $user_id;
         $deleteStmt = $db->prepare('DELETE FROM invoice_recipients WHERE user_id = :user_id');
         $deleteStmt->execute(['user_id' => $targetUserId]);
 

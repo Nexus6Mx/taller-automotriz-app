@@ -2,6 +2,7 @@
 include_once '../utils/cors.php';
 include_once '../config/database.php';
 include_once '../auth/verify.php';
+require_once '../users/log_audit.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -23,6 +24,13 @@ if (!$user_active) {
     exit();
 }
 
+// Permisos: solo Administrador puede eliminar órdenes
+if ($user_role !== 'Administrador') {
+    http_response_code(403);
+    echo json_encode(["message" => "Solo un administrador puede eliminar órdenes."]);
+    exit();
+}
+
 $data = json_decode(file_get_contents("php://input"));
 
 if (empty($data) || empty($data->id)) {
@@ -33,18 +41,20 @@ if (empty($data) || empty($data->id)) {
 
 try {
     // La eliminación en cascada en la DB se encargará de los `order_items`.
-    $query = "DELETE FROM orders WHERE id = :id AND user_id = :user_id";
+    // Admin puede eliminar cualquier orden
+    $query = "DELETE FROM orders WHERE id = :id";
     $stmt = $db->prepare($query);
     
     $stmt->bindParam(':id', $data->id);
-    $stmt->bindParam(':user_id', $user_id);
     
     if ($stmt->execute()) {
         if ($stmt->rowCount() > 0) {
             echo json_encode(["message" => "Orden eliminada exitosamente."]);
+            // Audit
+            log_audit($db, $user_id, 'order_deleted', 'order', $data->id, null);
         } else {
             http_response_code(404);
-            echo json_encode(["message" => "Orden no encontrada o no pertenece al usuario."]);
+            echo json_encode(["message" => "Orden no encontrada."]);
         }
     } else {
         throw new Exception("Error en la base de datos al eliminar.");
