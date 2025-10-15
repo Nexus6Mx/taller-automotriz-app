@@ -33,6 +33,14 @@
         .autocomplete-item:hover, .autocomplete-item.active {
             background-color: #f3f4f6;
         }
+        /* Small animation for sort indicator */
+        .sort-indicator {
+            display: inline-block;
+            width: 1em;
+            text-align: center;
+            transition: transform 180ms ease, opacity 180ms ease;
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -275,39 +283,74 @@
             <div id="catalogos" class="tab-content">
                 <div class="space-y-8">
                     <div class="bg-white p-6 rounded-lg shadow">
-                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xl font-bold">Catálogo de Clientes</h2>
-                            <input type="text" id="client-search" placeholder="Buscar por nombre o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogos</h2>
+                            <div class="space-x-2">
+                                <button id="catalog-btn-clients" class="px-3 py-1 rounded bg-blue-600 text-white text-sm">Clientes</button>
+                                <button id="catalog-btn-vehicles" class="px-3 py-1 rounded bg-gray-100 text-sm">Vehículos</button>
+                                <button id="catalog-btn-supplies" class="px-3 py-1 rounded bg-gray-100 text-sm">Insumos</button>
+                            </div>
                         </div>
-                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Nombre</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Teléfono</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Email</th>
-                        </tr></thead><tbody id="clients-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
-                    </div>
-                     <div class="bg-white p-6 rounded-lg shadow">
-                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xl font-bold">Catálogo de Vehículos</h2>
-                            <input type="text" id="vehicle-search" placeholder="Buscar por cliente, marca, placas o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        <div class="overflow-auto">
+                            <div id="catalog-clients" class="catalog-panel">
+                                <div class="mb-4"><input type="text" id="client-search" placeholder="Buscar por nombre o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm"></div>
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                            <tr>
+                                                <th data-sort-key="numeric_id" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">ID</span> <span class="sort-indicator"></span></th>
+                                                <th data-sort-key="name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Nombre</span> <span class="sort-indicator"></span></th>
+                                                <th data-sort-key="cel" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Teléfono</span> <span class="sort-indicator"></span></th>
+                                                <th data-sort-key="email" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Email</span> <span class="sort-indicator"></span></th>
+                                            </tr>
+                                        <tr class="bg-white">
+                                            <th class="px-6 py-2"><input id="client-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar ID"></th>
+                                            <th class="px-6 py-2"><input id="client-filter-name" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Nombre"></th>
+                                            <th class="px-6 py-2"><input id="client-filter-cel" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Teléfono"></th>
+                                            <th class="px-6 py-2"><input id="client-filter-email" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Email"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="clients-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
+                            <div id="catalog-vehicles" class="catalog-panel hidden">
+                                <div class="mb-4"><input type="text" id="vehicle-search" placeholder="Buscar por cliente, marca, placas o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm"></div>
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th data-sort-key="numeric_id" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">ID</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="client_name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Cliente</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="brand" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Marca/Modelo</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="plates" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Placas</span> <span class="sort-indicator"></span></th>
+                                        </tr>
+                                        <tr class="bg-white">
+                                            <th class="px-6 py-2"><input id="vehicle-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar ID"></th>
+                                            <th class="px-6 py-2"><input id="vehicle-filter-client" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Cliente"></th>
+                                            <th class="px-6 py-2"><input id="vehicle-filter-brand" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Marca"></th>
+                                            <th class="px-6 py-2"><input id="vehicle-filter-plates" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Placas"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="vehicles-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
+                            <div id="catalog-supplies" class="catalog-panel hidden">
+                                <div class="mb-4"><input type="text" id="supply-search" placeholder="Buscar por descripción o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm"></div>
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th data-sort-key="numeric_id" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">ID</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="description" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Descripción</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="price" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Precio Unitario</span> <span class="sort-indicator"></span></th>
+                                        </tr>
+                                        <tr class="bg-white">
+                                            <th class="px-6 py-2"><input id="supply-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar ID"></th>
+                                            <th class="px-6 py-2"><input id="supply-filter-desc" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Descripción"></th>
+                                            <th class="px-6 py-2"><input id="supply-filter-price" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Precio"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="supplies-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
                         </div>
-                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Cliente</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Marca/Modelo</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Placas</th>
-                        </tr></thead><tbody id="vehicles-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow">
-                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xl font-bold">Catálogo de Insumos</h2>
-                            <input type="text" id="supply-search" placeholder="Buscar por descripción o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
-                        </div>
-                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Descripción</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Precio Unitario</th>
-                        </tr></thead><tbody id="supplies-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
                     </div>
                 </div>
             </div>
@@ -322,15 +365,31 @@
                         <!-- Invoice settings moved to Configuración page -->
                     </div>
                     <!-- Invoice settings moved to Configuración page -->
-                    <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr>
-                        <th data-sort-key="numericId" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">#</th>
-                        <th data-sort-key="status" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Estado</th>
-                        <th data-sort-key="createdAt" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Fecha</th>
-                        <th data-sort-key="client.name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Cliente</th>
-                        <th data-sort-key="vehicle.brand" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Vehículo</th>
-                        <th data-sort-key="total" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Total</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Acciones</th>
-                    </tr></thead><tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th data-sort-key="numericId" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">#</th>
+                                        <th data-sort-key="status" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Estado</th>
+                                        <th data-sort-key="createdAt" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Fecha</th>
+                                        <th data-sort-key="client.name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Cliente</th>
+                                        <th data-sort-key="vehicle.brand" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Vehículo</th>
+                                        <th data-sort-key="total" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Total</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Acciones</th>
+                                    </tr>
+                                    <tr class="bg-white">
+                                        <th class="px-6 py-2"><input id="order-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar #"></th>
+                                        <th class="px-6 py-2"><select id="order-filter-status" class="w-full text-xs rounded border-gray-200 p-1"><option value="">Todos</option></select></th>
+                                        <th class="px-6 py-2"><input id="order-filter-date" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Fecha (DD/MM/YYYY)"></th>
+                                        <th class="px-6 py-2"><input id="order-filter-client" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Cliente"></th>
+                                        <th class="px-6 py-2"><input id="order-filter-vehicle" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Vehículo"></th>
+                                        <th class="px-6 py-2"><input id="order-filter-total" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Total"></th>
+                                        <th class="px-6 py-2"><button id="order-filters-clear" class="text-sm px-2 py-1 rounded bg-gray-100">Limpiar</button></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
                  </div>
             </div>
         </main>
@@ -352,6 +411,11 @@
         let chartRevenue = null;
         let orderSortState = { key: 'numericId', direction: 'desc' }; // Estado de ordenamiento de la tabla de órdenes
         let unpaidOrderSortState = { key: 'createdAt', direction: 'asc' }; // Estado de ordenamiento para órdenes pendientes
+        let catalogSortState = {
+            clients: { key: null, direction: 'asc' },
+            vehicles: { key: null, direction: 'asc' },
+            supplies: { key: null, direction: 'asc' }
+        };
 
         const ui = {
             tabs: document.querySelectorAll('.tab-btn'),
@@ -447,6 +511,10 @@
             setupFormListeners();
             setupHistoryTableListeners();
             setupActionsDropdowns();
+            setupCatalogSelector();
+            setupCatalogFilters();
+            restoreCatalogSortState();
+            setupCatalogSorting();
             // setupUnpaidOrdersTableListeners(); // Temporalmente deshabilitado
             resetForm();
 
@@ -585,10 +653,48 @@
         // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
         
         function renderOrdersTable(filter = '') {
-            // 1. Filtrado
-            let filteredOrders = localData.orders.filter(o =>
-                `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase().includes(filter.toLowerCase())
-            );
+            // Read per-column filters from the Historial header
+            const fid = (document.getElementById('order-filter-id')?.value || '').toLowerCase().trim();
+            const fstatus = (document.getElementById('order-filter-status')?.value || '').toLowerCase().trim();
+            const fdate = (document.getElementById('order-filter-date')?.value || '').toLowerCase().trim();
+            const fclient = (document.getElementById('order-filter-client')?.value || '').toLowerCase().trim();
+            const fvehicle = (document.getElementById('order-filter-vehicle')?.value || '').toLowerCase().trim();
+            const ftotal = (document.getElementById('order-filter-total')?.value || '').toLowerCase().trim();
+            const quick = (filter || '').toLowerCase();
+
+            // 1. Filtrado combinado (quick search + per-column filters)
+            let filteredOrders = localData.orders.filter(o => {
+                // Quick free-text search (cliente, vehículo, placas, folio)
+                if (quick) {
+                    const hay = `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase();
+                    if (!hay.includes(quick)) return false;
+                }
+
+                if (fid && !String(o.numericId).toLowerCase().includes(fid)) return false;
+
+                if (fstatus) {
+                    const os = normalizeStatus(o.status || '').toLowerCase();
+                    if (os !== fstatus) return false;
+                }
+
+                if (fdate) {
+                    // Expecting DD/MM/YYYY in the input; validateDate returns YYYY-MM-DD
+                    const parsed = validateDate(fdate);
+                    const isoDate = o.createdAt ? new Date(o.createdAt).toISOString().slice(0,10) : '';
+                    if (!parsed || !isoDate.startsWith(parsed)) return false;
+                }
+
+                if (fclient && !(o.client.name || '').toLowerCase().includes(fclient)) return false;
+
+                if (fvehicle) {
+                    const v = `${o.vehicle.brand} ${o.vehicle.plates}`.toLowerCase();
+                    if (!v.includes(fvehicle)) return false;
+                }
+
+                if (ftotal && !String(o.total).toLowerCase().includes(ftotal)) return false;
+
+                return true;
+            });
 
             // 2. Ordenamiento
             const { key, direction } = orderSortState;
@@ -663,8 +769,38 @@
         }
 
         function renderClientsTable(filter = '') {
-            const f = filter.toLowerCase();
-            const filtered = localData.clients.filter(c => c.name.toLowerCase().includes(f) || c.numeric_id.toString().includes(f));
+            // Read column filters
+            const fid = (document.getElementById('client-filter-id')?.value || '').toLowerCase();
+            const fname = (document.getElementById('client-filter-name')?.value || '').toLowerCase();
+            const fcel = (document.getElementById('client-filter-cel')?.value || '').toLowerCase();
+            const femail = (document.getElementById('client-filter-email')?.value || '').toLowerCase();
+
+            const filtered = localData.clients.filter(c => {
+                if (fid && !String(c.numeric_id).toLowerCase().includes(fid)) return false;
+                if (fname && !(c.name || '').toLowerCase().includes(fname)) return false;
+                if (fcel && !((c.cel||'').toLowerCase().includes(fcel))) return false;
+                if (femail && !((c.email||'').toLowerCase().includes(femail))) return false;
+                // legacy quick filter
+                if (filter) {
+                    const f = filter.toLowerCase();
+                    if (!(`${c.name} ${c.numeric_id}`.toLowerCase().includes(f))) return false;
+                }
+                return true;
+            });
+
+            // Apply sorting if specified
+            const sortState = catalogSortState.clients;
+            if (sortState && sortState.key) {
+                filtered.sort((a,b) => {
+                    const ka = (a[sortState.key] || '').toString().toLowerCase();
+                    const kb = (b[sortState.key] || '').toString().toLowerCase();
+                    if (!isNaN(Number(ka)) && !isNaN(Number(kb))) {
+                        return sortState.direction === 'asc' ? Number(ka) - Number(kb) : Number(kb) - Number(ka);
+                    }
+                    return sortState.direction === 'asc' ? ka.localeCompare(kb) : kb.localeCompare(ka);
+                });
+            }
+
             document.getElementById('clients-table').innerHTML = filtered.map(c => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-bold">${c.numeric_id}</td>
@@ -675,8 +811,36 @@
         }
 
         function renderVehiclesTable(filter = '') {
-            const f = filter.toLowerCase();
-            const filtered = localData.vehicles.filter(v => `${v.client_name} ${v.brand} ${v.plates}`.toLowerCase().includes(f) || v.numeric_id.toString().includes(f));
+            const fid = (document.getElementById('vehicle-filter-id')?.value || '').toLowerCase();
+            const fclient = (document.getElementById('vehicle-filter-client')?.value || '').toLowerCase();
+            const fbrand = (document.getElementById('vehicle-filter-brand')?.value || '').toLowerCase();
+            const fplates = (document.getElementById('vehicle-filter-plates')?.value || '').toLowerCase();
+
+            const filtered = localData.vehicles.filter(v => {
+                if (fid && !String(v.numeric_id).toLowerCase().includes(fid)) return false;
+                if (fclient && !((v.client_name||'').toLowerCase().includes(fclient))) return false;
+                if (fbrand && !((v.brand||'').toLowerCase().includes(fbrand))) return false;
+                if (fplates && !((v.plates||'').toLowerCase().includes(fplates))) return false;
+                if (filter) {
+                    const f = filter.toLowerCase();
+                    if (!(`${v.client_name} ${v.brand} ${v.plates}`.toLowerCase().includes(f)) && !String(v.numeric_id).toLowerCase().includes(f)) return false;
+                }
+                return true;
+            });
+
+            // Apply sorting for vehicles
+            const sortStateV = catalogSortState.vehicles;
+            if (sortStateV && sortStateV.key) {
+                filtered.sort((a,b) => {
+                    const ka = (a[sortStateV.key] || '').toString().toLowerCase();
+                    const kb = (b[sortStateV.key] || '').toString().toLowerCase();
+                    if (!isNaN(Number(ka)) && !isNaN(Number(kb))) {
+                        return sortStateV.direction === 'asc' ? Number(ka) - Number(kb) : Number(kb) - Number(ka);
+                    }
+                    return sortStateV.direction === 'asc' ? ka.localeCompare(kb) : kb.localeCompare(ka);
+                });
+            }
+
             document.getElementById('vehicles-table').innerHTML = filtered.map(v => `
                  <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-bold">${v.numeric_id}</td>
@@ -687,8 +851,34 @@
         }
 
         function renderSuppliesTable(filter = '') {
-            const f = filter.toLowerCase();
-            const filtered = localData.supplies.filter(s => s.description.toLowerCase().includes(f) || s.numeric_id.toString().includes(f));
+            const fid = (document.getElementById('supply-filter-id')?.value || '').toLowerCase();
+            const fdesc = (document.getElementById('supply-filter-desc')?.value || '').toLowerCase();
+            const fprice = (document.getElementById('supply-filter-price')?.value || '').toLowerCase();
+
+            const filtered = localData.supplies.filter(s => {
+                if (fid && !String(s.numeric_id).toLowerCase().includes(fid)) return false;
+                if (fdesc && !((s.description||'').toLowerCase().includes(fdesc))) return false;
+                if (fprice && !String(s.price).toLowerCase().includes(fprice)) return false;
+                if (filter) {
+                    const f = filter.toLowerCase();
+                    if (!((s.description||'').toLowerCase().includes(f)) && !String(s.numeric_id).toLowerCase().includes(f)) return false;
+                }
+                return true;
+            });
+
+            // Apply sorting for supplies
+            const sortStateS = catalogSortState.supplies;
+            if (sortStateS && sortStateS.key) {
+                filtered.sort((a,b) => {
+                    const ka = (a[sortStateS.key] || '').toString().toLowerCase();
+                    const kb = (b[sortStateS.key] || '').toString().toLowerCase();
+                    if (!isNaN(Number(ka)) && !isNaN(Number(kb))) {
+                        return sortStateS.direction === 'asc' ? Number(ka) - Number(kb) : Number(kb) - Number(ka);
+                    }
+                    return sortStateS.direction === 'asc' ? ka.localeCompare(kb) : kb.localeCompare(ka);
+                });
+            }
+
             document.getElementById('supplies-table').innerHTML = filtered.map(s => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 font-bold">${s.numeric_id}</td>
@@ -969,6 +1159,41 @@
             ui.exportBtn.addEventListener('click', exportToCSV);
         }
 
+        // Wire the per-column filters for Historial
+        (function setupOrderFilters() {
+            const ids = ['order-filter-id','order-filter-status','order-filter-date','order-filter-client','order-filter-vehicle','order-filter-total'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
+            });
+
+            // Populate status options from statusConfig
+            const statusSelect = document.getElementById('order-filter-status');
+            if (statusSelect) {
+                // Remove existing except 'Todos'
+                const have = new Set();
+                Object.keys(statusConfig).forEach(s => {
+                    have.add(s);
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = s;
+                    statusSelect.appendChild(opt);
+                });
+            }
+
+            const clearBtn = document.getElementById('order-filters-clear');
+            if (clearBtn) clearBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+                    else el.value = '';
+                });
+                renderOrdersTable('');
+            });
+        })();
+
         function setupHistoryTableListeners() {
             document.querySelectorAll('#historial th[data-sort-key]').forEach(header => {
                 header.addEventListener('click', () => {
@@ -981,6 +1206,115 @@
                     }
                     renderOrdersTable(ui.orderSearch.value);
                 });
+            });
+        }
+
+        function setupCatalogSelector() {
+            const btnClients = document.getElementById('catalog-btn-clients');
+            const btnVehicles = document.getElementById('catalog-btn-vehicles');
+            const btnSupplies = document.getElementById('catalog-btn-supplies');
+
+            const panelClients = document.getElementById('catalog-clients');
+            const panelVehicles = document.getElementById('catalog-vehicles');
+            const panelSupplies = document.getElementById('catalog-supplies');
+
+            function showPanel(name) {
+                panelClients.classList.toggle('hidden', name !== 'clients');
+                panelVehicles.classList.toggle('hidden', name !== 'vehicles');
+                panelSupplies.classList.toggle('hidden', name !== 'supplies');
+
+                btnClients.classList.toggle('bg-blue-600', name === 'clients');
+                btnClients.classList.toggle('bg-gray-100', name !== 'clients');
+                btnVehicles.classList.toggle('bg-blue-600', name === 'vehicles');
+                btnVehicles.classList.toggle('bg-gray-100', name !== 'vehicles');
+                btnSupplies.classList.toggle('bg-blue-600', name === 'supplies');
+                btnSupplies.classList.toggle('bg-gray-100', name !== 'supplies');
+            }
+
+            btnClients.addEventListener('click', () => showPanel('clients'));
+            btnVehicles.addEventListener('click', () => showPanel('vehicles'));
+            btnSupplies.addEventListener('click', () => showPanel('supplies'));
+
+            // Show clients by default
+            showPanel('clients');
+        }
+
+        function setupCatalogSorting() {
+            // Attach handlers to all th elements with data-sort-key within catalog panels
+            document.querySelectorAll('#catalog-clients th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => handleCatalogSort('clients', th.dataset.sortKey, th));
+            });
+            document.querySelectorAll('#catalog-vehicles th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => handleCatalogSort('vehicles', th.dataset.sortKey, th));
+            });
+            document.querySelectorAll('#catalog-supplies th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => handleCatalogSort('supplies', th.dataset.sortKey, th));
+            });
+        }
+
+        function handleCatalogSort(catalog, key, thElement) {
+            const state = catalogSortState[catalog];
+            if (state.key === key) {
+                state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.key = key;
+                state.direction = 'asc';
+            }
+
+            // Update visual indicators
+            const panel = document.getElementById(`catalog-${catalog}`);
+            panel.querySelectorAll('.sort-indicator').forEach(si => si.textContent = '');
+            const indicator = thElement.querySelector('.sort-indicator');
+            if (indicator) indicator.textContent = state.direction === 'asc' ? '↑' : '↓';
+
+            // Persist state
+            try { localStorage.setItem('catalogSortState', JSON.stringify(catalogSortState)); } catch(e) {}
+
+            // Re-render the corresponding table
+            if (catalog === 'clients') renderClientsTable();
+            if (catalog === 'vehicles') renderVehiclesTable();
+            if (catalog === 'supplies') renderSuppliesTable();
+        }
+
+        function restoreCatalogSortState() {
+            try {
+                const raw = localStorage.getItem('catalogSortState');
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (parsed) catalogSortState = Object.assign(catalogSortState, parsed);
+                // Update indicators
+                ['clients','vehicles','supplies'].forEach(cat => {
+                    const state = catalogSortState[cat];
+                    if (!state || !state.key) return;
+                    const panel = document.getElementById(`catalog-${cat}`);
+                    if (!panel) return;
+                    panel.querySelectorAll('.sort-indicator').forEach(si => si.textContent = '');
+                    const th = panel.querySelector(`th[data-sort-key="${state.key}"]`);
+                    if (th) {
+                        const indicator = th.querySelector('.sort-indicator');
+                        if (indicator) indicator.textContent = state.direction === 'asc' ? '↑' : '↓';
+                    }
+                });
+            } catch (e) { /* ignore restore errors */ }
+        }
+
+        function setupCatalogFilters() {
+            // Clients
+            ['client-filter-id','client-filter-name','client-filter-cel','client-filter-email','client-search'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderClientsTable(ui.orderSearch.value));
+            });
+
+            // Vehicles
+            ['vehicle-filter-id','vehicle-filter-client','vehicle-filter-brand','vehicle-filter-plates','vehicle-search'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderVehiclesTable());
+            });
+
+            // Supplies
+            ['supply-filter-id','supply-filter-desc','supply-filter-price','supply-search'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderSuppliesTable());
             });
         }
 
