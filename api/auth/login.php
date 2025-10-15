@@ -18,7 +18,7 @@ if (empty($data->email) || empty($data->password)) {
 
 try {
     // 1. Buscar al usuario por email
-    $query = "SELECT id, email, password_hash, failed_attempts, locked_until, active FROM users WHERE email = :email";
+    $query = "SELECT id, email, role, password_hash, failed_attempts, locked_until, active FROM users WHERE email = :email";
     $stmt = $db->prepare($query);
     $stmt->bindParam(":email", $data->email);
     $stmt->execute();
@@ -105,7 +105,7 @@ try {
         "token" => $token,
         "user_id" => $user['id'],
         "email" => $user['email'],
-        "role" => $user['role'] ?? 'Operador',
+        "role" => isset($user['role']) ? $user['role'] : 'Operador',
         "active" => isset($user['active']) ? (int)$user['active'] : 1
     ]);
 

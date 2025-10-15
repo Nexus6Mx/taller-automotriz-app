@@ -416,7 +416,7 @@
 
             // Mostrar botón de configuración solo a admin
             const currentUserEmail = (localStorage.getItem('userEmail') || '').toLowerCase();
-            const isAdmin = currentUserEmail === 'admin@errautomotriz.online';
+            const isAdmin = currentUserEmail === 'admin@errautomotriz.online' || (localStorage.getItem('userRole')||'').toLowerCase().startsWith('admin');
             const invoiceBtn = document.getElementById('invoice-settings-btn');
             const invoicePanel = document.getElementById('invoice-settings-panel');
             const invoiceTextarea = document.getElementById('invoice-settings-emails');
@@ -472,6 +472,17 @@
                     }
                 });
             }
+
+            // Revalidar rol por si localStorage está desfasado
+            try {
+                const me = await window.apiService.request('/auth/me.php');
+                if (me && me.role && String(me.role).toLowerCase().startsWith('admin')) {
+                    localStorage.setItem('userRole', me.role);
+                    const cfgBtn = document.getElementById('config-btn');
+                    if (cfgBtn) cfgBtn.style.display = '';
+                    if (invoiceBtn) invoiceBtn.classList.remove('hidden');
+                }
+            } catch(e) { /* ignorar si falla */ }
 
             // --- Carga inicial de datos ---
             await loadData();
