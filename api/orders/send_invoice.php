@@ -48,6 +48,22 @@ if (function_exists('getallheaders')) {
 }
 $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
 $token = $authHeader ? str_replace('Bearer ', '', $authHeader) : '';
+// Fallbacks: allow token via cookie, query string or JSON body (shared hosting may strip Authorization headers)
+if (!$token) {
+    if (!empty($_COOKIE['authToken'])) {
+        $token = $_COOKIE['authToken'];
+    }
+}
+if (!$token) {
+    if (!empty($_GET['token'])) {
+        $token = $_GET['token'];
+    } else if (!empty($rawInput)) {
+        $j = json_decode($rawInput, true);
+        if (json_last_error() === JSON_ERROR_NONE && !empty($j['token'])) {
+            $token = $j['token'];
+        }
+    }
+}
  $user = verifyToken($db, $token);
 
  if (!$user) {
@@ -71,19 +87,41 @@ if (!in_array($user_role, ['Administrador', 'Operador'])) {
     exit;
 }
 
-$data = json_decode($rawInput);
-if (!$data || !isset($data->id)) {
+$jsonObj = json_decode($rawInput, true);
+$orderId = null;
+$numericId = null;
+if (is_array($jsonObj)) {
+    if (isset($jsonObj['id'])) $orderId = (int)$jsonObj['id'];
+    if (isset($jsonObj['numericId'])) $numericId = (int)$jsonObj['numericId'];
+}
+// Fallbacks for form or query submissions
+if (!$orderId && isset($_POST['id'])) $orderId = (int)$_POST['id'];
+if (!$numericId && isset($_POST['numericId'])) $numericId = (int)$_POST['numericId'];
+if (!$orderId && isset($_GET['id'])) $orderId = (int)$_GET['id'];
+if (!$numericId && isset($_GET['numericId'])) $numericId = (int)$_GET['numericId'];
+
+if (!$orderId && !$numericId) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'ID de orden requerido']);
     exit;
 }
 
-$orderId = $data->id;
-
 try {
-    $stmt = $db->prepare("SELECT * FROM orders WHERE id = :id");
-    $stmt->execute(['id' => $orderId]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    $order = null;
+    if ($orderId) {
+        $stmt = $db->prepare("SELECT * FROM orders WHERE id = :id");
+        $stmt->execute(['id' => $orderId]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    // If not found by id and we have numericId, try by numeric_id
+    if (!$order && $numericId) {
+        $stmt = $db->prepare("SELECT * FROM orders WHERE numeric_id = :numeric_id LIMIT 1");
+        $stmt->execute(['numeric_id' => $numericId]);
+        $order = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($order) {
+            $orderId = (int)$order['id'];
+        }
+    }
 
     if (!$order) {
         http_response_code(404);
@@ -195,6 +233,17 @@ try {
     $subject = 'Solicitud de facturación de orden – ERR Automotriz';
     $bodyText = "Estimados,\n\nPor este medio solicitamos la facturación correspondiente de la siguiente orden de servicio, que se adjunta en PDF.\n\nAgradecemos su pronta atención y quedamos atentos a cualquier requisito adicional o comentario para poder completar el proceso.\n\nAtentamente,\nÁrea de Servicio\nERR Automotriz";
 
+    // Before sending, ensure status is set to 'En Facturación' (idempotent safeguard)
+    try {
+        if ($order['status'] !== 'En Facturación') {
+            $stmtUpd = $db->prepare("UPDATE orders SET status = 'En Facturación' WHERE id = :id");
+            $stmtUpd->execute(['id' => $orderId]);
+        }
+    } catch (Exception $e) {
+        log_send_invoice('Status update safeguard failed: ' . $e->getMessage());
+        // Continue anyway; frontend may have updated it already
+    }
+
     // try PHPMailer
     if (file_exists('../../PHPMailer/src/PHPMailer.php')){
         require_once '../../PHPMailer/src/PHPMailer.php';
@@ -220,7 +269,7 @@ try {
             $mail->addStringAttachment($pdfContent, 'orden_' . $order['numeric_id'] . '.pdf');
             $mail->send();
             log_send_invoice('PHPMailer send success');
-            echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada']);
+            echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada con éxito']);
             log_send_invoice('Audit: order_invoice_requested');
             log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
             exit;
@@ -259,7 +308,7 @@ try {
     }
 
     if ($allSent){
-        echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada']);
+    echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada con éxito']);
         log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
     } else {
         http_response_code(500);

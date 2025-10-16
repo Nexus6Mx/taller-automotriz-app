@@ -103,11 +103,16 @@
         </div>
     </div>
 
-    <script src="/assets/js/app.js?v=1.5"></script>
+    <script src="/assets/js/app.js?v=1.6"></script>
     <script src="/assets/js/config.js"></script>
     <script>
         // Invoice recipients management moved here from Historial
         document.addEventListener('DOMContentLoaded', () => {
+            // Ensure apiService exists even if app.js didn't initialize for any reason
+            if (!window.apiService && typeof APIService === 'function') {
+                window.apiService = new APIService();
+            }
+
             const textarea = document.getElementById('invoice-settings-emails');
             const saveBtn = document.getElementById('invoice-settings-save');
             const refreshBtn = document.getElementById('invoice-settings-refresh');
@@ -116,7 +121,21 @@
             async function loadEmails(){
                 feedback.textContent = '';
                 try {
-                    const res = await window.apiService.getInvoiceRecipients();
+                    // Fallback to direct fetch if apiService is unavailable
+                    let res;
+                    if (window.apiService && typeof window.apiService.getInvoiceRecipients === 'function') {
+                        res = await window.apiService.getInvoiceRecipients();
+                    } else {
+                        const token = localStorage.getItem('authToken');
+                        const r = await fetch('/api/orders/invoice_recipients.php', {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                            }
+                        });
+                        res = await r.json();
+                        if (!r.ok) throw new Error(res && res.message ? res.message : 'Error HTTP ' + r.status);
+                    }
                     textarea.value = (res.data || []).join('\n');
                 } catch (err) {
                     feedback.textContent = 'Error al cargar: ' + (err.message || err);
@@ -141,12 +160,34 @@
                     return;
                 }
                 try {
-                    const res = await window.apiService.updateInvoiceRecipients(lines);
-                    feedback.textContent = 'Correos guardados correctamente.';
+                    saveBtn.disabled = true; saveBtn.classList.add('opacity-50');
+                    // Fallback to direct fetch if apiService is unavailable
+                    if (window.apiService && typeof window.apiService.updateInvoiceRecipients === 'function') {
+                        await window.apiService.updateInvoiceRecipients(lines);
+                    } else {
+                        const token = localStorage.getItem('authToken');
+                        const r = await fetch('/api/orders/invoice_recipients.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-HTTP-Method-Override': 'PUT',
+                                ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                            },
+                            body: JSON.stringify({ emails: lines })
+                        });
+                        const res = await r.json();
+                        if (!r.ok) throw new Error(res && res.message ? res.message : 'Error HTTP ' + r.status);
+                    }
+                    feedback.textContent = 'Correos guardados con éxito';
                     feedback.className = 'mt-3 text-sm text-green-700';
+                    // Refresh list to reflect normalization/order from backend
+                    await loadEmails();
                 } catch (err) {
                     feedback.textContent = 'Error al guardar: ' + (err.message || err);
                     feedback.className = 'mt-3 text-sm text-red-700';
+                }
+                finally {
+                    saveBtn.disabled = false; saveBtn.classList.remove('opacity-50');
                 }
             });
 

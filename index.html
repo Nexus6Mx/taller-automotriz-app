@@ -48,7 +48,7 @@
         <header class="bg-white shadow-md rounded-lg p-6 mb-8">
             <div class="flex justify-between items-center flex-wrap gap-4">
                 <div class="flex items-center gap-4">
-                    <img id="header-logo" src="https://errautomotriz.com/assets/images/err.gif" alt="Logo" class="h-16">
+                    <img id="header-logo" src="assets/images/err.gif" alt="Logo" class="h-16">
                     <div>
                         <h1 class="text-3xl font-bold text-gray-900">Gestor de Órdenes de Servicio</h1>
                         <p class="text-gray-600 mt-1">MVP v3.2 - Conectado a Servidor MySQL/PHP.</p>
@@ -421,7 +421,7 @@
     <datalist id="vehicles-datalist"></datalist>
     <datalist id="supplies-datalist"></datalist>
 
-    <script src="/assets/js/app.js?v=1.5"></script>
+    <script src="/assets/js/app.js?v=1.6"></script>
     <script>
         // Este script se carga después de app.js y extiende sus funcionalidades.
         // Se asegura de que la aplicación esté completamente cargada antes de ejecutarse.
@@ -489,7 +489,21 @@
             }
 
             ui.userEmail.textContent = localStorage.getItem('userEmail');
-            ui.logoutBtn.addEventListener('click', () => window.apiService.logout());
+            ui.logoutBtn.addEventListener('click', () => {
+                try {
+                    if (window.apiService && typeof window.apiService.logout === 'function') {
+                        return window.apiService.logout();
+                    }
+                } catch(e) { /* ignore */ }
+                // Fallback si apiService no está disponible (p.ej. error de carga)
+                try {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userEmail');
+                    localStorage.removeItem('userId');
+                    localStorage.removeItem('userRole');
+                } catch(e) { /* ignore */ }
+                window.location.href = '/login.html';
+            });
 
             // Mostrar botón de configuración solo a admin
             const currentUserEmail = (localStorage.getItem('userEmail') || '').toLowerCase();
@@ -749,8 +763,7 @@
                 }
             });
 
-            // 4. Renderizado
-            const normalizeStatus = (s) => (s === 'En reparación' ? 'Autorizado en reparación' : s);
+            // 4. Renderizado (usa helper global normalizeStatus)
             ui.ordersTable.innerHTML = filteredOrders.map(o => {
                 o.status = normalizeStatus(o.status);
                 const statusInfo = statusConfig[o.status] || { class: 'bg-gray-200 text-gray-800' };
@@ -1186,7 +1199,16 @@
             const ids = ['order-filter-id','order-filter-status','order-filter-date','order-filter-client','order-filter-vehicle','order-filter-total'];
             ids.forEach(id => {
                 const el = document.getElementById(id);
-                if (el) el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
+                if (!el) return;
+                // For text/number inputs, input event is fine
+                if (el.tagName !== 'SELECT') {
+                    el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
+                } else {
+                    // For selects, use change event for better cross-browser support
+                    el.addEventListener('change', () => renderOrdersTable(ui.orderSearch.value));
+                    // Some browsers also emit input; keep it as a no-op safety
+                    el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
+                }
             });
 
             // Populate status options from statusConfig
@@ -1212,6 +1234,8 @@
                     if (el.tagName === 'SELECT') el.selectedIndex = 0;
                     else el.value = '';
                 });
+                // Also clear the quick search bar
+                if (ui.orderSearch) ui.orderSearch.value = '';
                 renderOrdersTable('');
             });
         })();
