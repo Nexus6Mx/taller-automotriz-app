@@ -110,6 +110,9 @@
                                 <div id="kpi-mi-0" class="text-2xl font-bold text-green-600">$0.00</div>
                             </div>
                         </div>
+                        <div class="mt-3">
+                            <canvas id="income-3m-chart" height="80"></canvas>
+                        </div>
                         <p class="text-xs text-gray-500 mt-2">Estados: Facturado y Entregado Pagado</p>
                     </div>
                 </div>
@@ -464,8 +467,8 @@
         // Variables globales y de UI
         let localData = { orders: [], clients: [], supplies: [], vehicles: [] };
         let currentEditId = null;
-        let chartStatus = null;
-        let chartRevenue = null;
+    let chartStatus = null; // reused for workload chart
+    let chartIncome3m = null;
         let orderSortState = { key: 'numericId', direction: 'desc' }; // Estado de ordenamiento de la tabla de órdenes
         let unpaidOrderSortState = { key: 'createdAt', direction: 'asc' }; // Estado de ordenamiento para órdenes pendientes
         let catalogSortState = {
@@ -1007,8 +1010,35 @@
                 const lbl = document.getElementById(`kpi-mi-label-${idx}`);
                 const val = document.getElementById(`kpi-mi-${idx}`);
                 if (lbl) lbl.textContent = b?.label || '';
-                if (val) val.textContent = formatCurrency(b?.total || 0);
+                if (val) {
+                    val.textContent = formatCurrency(b?.total || 0);
+                    val.title = `${b?.label || ''}: ${formatCurrency(b?.total || 0)}`;
+                }
             });
+
+            // Render/update small horizontal bar for last 3 months income
+            try { if (chartIncome3m) chartIncome3m.destroy(); } catch(e) {}
+            const cIncome = document.getElementById('income-3m-chart');
+            if (cIncome) {
+                chartIncome3m = new Chart(cIncome, {
+                    type: 'bar',
+                    data: {
+                        labels: buckets.map(b => b.label),
+                        datasets: [{
+                            label: 'Ingresos',
+                            data: buckets.map(b => b.total),
+                            backgroundColor: 'rgba(34, 197, 94, 0.6)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        indexAxis: 'y',
+                        scales: { x: { beginAtZero: true } },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            }
 
             // B) Workload bar chart
             updateWorkloadChart(orders);
