@@ -112,26 +112,36 @@
 
                     <!-- Income: compact header with current month and percent change, small 3-month mini values and sparkline -->
                     <div class="bg-white p-4 md:p-6 rounded-lg shadow">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-sm md:text-lg font-medium text-gray-500">Ingresos (últimos 3 meses)</h3>
-                                <div class="flex items-baseline gap-3">
+                        <h3 class="text-sm md:text-lg font-medium text-gray-500">Ingresos (últimos 3 meses)</h3>
+                        <div class="flex items-start gap-4 mt-3">
+                            <!-- Left: sparkline (fixed width) -->
+                            <div class="flex-shrink-0 w-28 h-14 flex items-center justify-center">
+                                <canvas id="income-3m-chart" style="width:100% !important; height:100% !important; display:block;" ></canvas>
+                            </div>
+
+                            <!-- Right: main total + monthly breakdown -->
+                            <div class="flex-1">
+                                <div class="flex items-baseline justify-between">
                                     <div>
-                                        <div id="kpi-income-current" class="mt-2 text-3xl md:text-4xl font-extrabold text-green-600">$0.00</div>
+                                        <div id="kpi-income-current" class="text-2xl md:text-3xl font-extrabold text-green-600">$0.00</div>
                                         <div id="kpi-income-change" class="text-xs text-gray-500 mt-1">% vs mes anterior: 0%</div>
                                     </div>
-                                    <div class="hidden sm:block text-sm text-gray-600">
+                                </div>
+
+                                <div class="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-600">
+                                    <div>
                                         <div id="kpi-mi-label-2" class="text-xs text-gray-400">Mes-2</div>
                                         <div id="kpi-mi-2" class="text-sm font-semibold text-green-600">$0.00</div>
-                                        <div id="kpi-mi-label-1" class="text-xs text-gray-400 mt-2">Mes-1</div>
+                                    </div>
+                                    <div>
+                                        <div id="kpi-mi-label-1" class="text-xs text-gray-400">Mes-1</div>
                                         <div id="kpi-mi-1" class="text-sm font-semibold text-green-600">$0.00</div>
-                                        <div id="kpi-mi-label-0" class="text-xs text-gray-400 mt-2">Mes</div>
+                                    </div>
+                                    <div>
+                                        <div id="kpi-mi-label-0" class="text-xs text-gray-400">Mes</div>
                                         <div id="kpi-mi-0" class="text-sm font-semibold text-green-600">$0.00</div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="w-36 h-12">
-                                <canvas id="income-3m-chart" height="48"></canvas>
                             </div>
                         </div>
                         <p class="text-xs text-gray-500 mt-3">Estados: Facturado y Entregado Pagado</p>
