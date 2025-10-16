@@ -82,28 +82,50 @@
         <main>
             <!-- Sección: Dashboard -->
              <div id="dashboard" class="tab-content active">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 draggable-container">
+                <!-- KPIs Gerenciales -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500 drag-handle cursor-move">Total Ingresado</h3>
-                        <p id="kpi-total-revenue" class="mt-1 text-4xl font-bold text-green-600">$0.00</p>
+                        <h3 class="text-lg font-medium text-gray-500">Cuentas por Cobrar</h3>
+                        <p id="kpi-accounts-receivable" class="mt-1 text-4xl font-bold text-red-600">$0.00</p>
+                        <p class="text-xs text-gray-500 mt-1">Suma de órdenes en "Entregado pendiente de pago"</p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500 drag-handle cursor-move">Ticket Promedio</h3>
-                        <p id="kpi-avg-ticket" class="mt-1 text-4xl font-bold text-blue-600">$0.00</p>
+                        <h3 class="text-lg font-medium text-gray-500">Órdenes en Proceso</h3>
+                        <p id="kpi-in-process" class="mt-1 text-4xl font-bold text-yellow-600">0</p>
+                        <p class="text-xs text-gray-500 mt-1">Recibido, Diagnostico, Autorizado en reparación, Preparacion para entrega</p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500">Total de Órdenes</h3>
-                        <p id="kpi-total-orders" class="mt-1 text-4xl font-bold text-indigo-600">0</p>
+                        <h3 class="text-lg font-medium text-gray-500">Ingreso del Mes</h3>
+                        <p id="kpi-month-income" class="mt-1 text-4xl font-bold text-green-600">$0.00</p>
+                        <p class="text-xs text-gray-500 mt-1">Facturado o Entregado Pagado en el mes</p>
                     </div>
                 </div>
-                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6 draggable-container">
-                    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes por Estado</h3>
-                        <canvas id="status-chart"></canvas>
+
+                <!-- Carga de trabajo -->
+                <div class="bg-white p-6 rounded-lg shadow mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribución de Carga de Trabajo</h3>
+                    <canvas id="workload-chart" height="140"></canvas>
+                </div>
+
+                <!-- Reporte de Antigüedad de Órdenes -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Órdenes con Antigüedad &gt; 15 días</h3>
+                        <span class="text-xs text-gray-500">Estados: Autorizado en reparación, Entregado pendiente de pago</span>
                     </div>
-                    <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Ingresos por Mes (Último año)</h3>
-                        <canvas id="revenue-chart"></canvas>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left"># Orden</th>
+                                    <th class="px-4 py-2 text-left">Cliente</th>
+                                    <th class="px-4 py-2 text-left">Estado</th>
+                                    <th class="px-4 py-2 text-left">Días</th>
+                                    <th class="px-4 py-2 text-left">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="aging-table" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -932,57 +954,79 @@
         }
 
         function updateDashboard() {
-            const orders = localData.orders;
-            const totalOrders = orders.length;
-            const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
-            const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-            document.getElementById('kpi-total-revenue').textContent = formatCurrency(totalRevenue);
-            document.getElementById('kpi-avg-ticket').textContent = formatCurrency(avgTicket);
-            document.getElementById('kpi-total-orders').textContent = totalOrders;
-            updateStatusChart(orders);
-            updateRevenueChart(orders);
+            const orders = (localData.orders || []).map(o => ({...o, status: normalizeStatus(o.status)}));
+
+            // A) KPIs
+            const accountsReceivable = orders
+                .filter(o => o.status === 'Entregado pendiente de pago')
+                .reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+            const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
+            const inProcessCount = orders.filter(o => inProcessStates.includes(o.status)).length;
+
+            // Ingreso del mes: estados Facturado o Entregado Pagado en el mes actual (usamos createdAt si no hay fecha específica)
+            const now = new Date();
+            const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+            const monthIncome = orders
+                .filter(o => ['Facturado','Entregado Pagado'].includes(o.status))
+                .filter(o => {
+                    if (!o.createdAt) return false;
+                    const d = new Date(o.createdAt);
+                    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+                    return key === ym;
+                })
+                .reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+            const k1 = document.getElementById('kpi-accounts-receivable');
+            const k2 = document.getElementById('kpi-in-process');
+            const k3 = document.getElementById('kpi-month-income');
+            if (k1) k1.textContent = formatCurrency(accountsReceivable);
+            if (k2) k2.textContent = String(inProcessCount);
+            if (k3) k3.textContent = formatCurrency(monthIncome);
+
+            // B) Workload bar chart
+            updateWorkloadChart(orders);
+
+            // C) Aging report
+            updateAgingReport(orders);
         }
 
-        function updateStatusChart(orders) {
-            const statusCounts = orders.reduce((acc, order) => {
-                acc[order.status] = (acc[order.status] || 0) + 1;
-                return acc;
-            }, {});
-            const labels = Object.keys(statusCounts);
-            const data = Object.values(statusCounts);
-            const backgroundColors = labels.map(label => statusConfig[label]?.color || 'rgba(156, 163, 175, 0.7)');
-            if (chartStatus) chartStatus.destroy();
-            chartStatus = new Chart(document.getElementById('status-chart'), {
-                type: 'doughnut',
-                data: { labels, datasets: [{ label: 'Órdenes', data, backgroundColor: backgroundColors, borderWidth: 1 }] },
-                options: { responsive: true, maintainAspectRatio: true }
-            });
-        }
-
-        function updateRevenueChart(orders) {
-            const monthlyRevenue = {};
-            const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-            const today = new Date();
-            for (let i = 11; i >= 0; i--) {
-                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-                const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
-                const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-                monthlyRevenue[key] = { label: label, total: 0 };
-            }
-            orders.forEach(order => {
-                if (!order.createdAt) return;
-                const orderDate = new Date(order.createdAt);
-                const key = `${orderDate.getFullYear()}-${String(orderDate.getMonth()).padStart(2, '0')}`;
-                if (monthlyRevenue[key]) monthlyRevenue[key].total += Number(order.total);
-            });
-            const labels = Object.values(monthlyRevenue).map(m => m.label);
-            const data = Object.values(monthlyRevenue).map(m => m.total);
-            if (chartRevenue) chartRevenue.destroy();
-            chartRevenue = new Chart(document.getElementById('revenue-chart'), {
+        function updateWorkloadChart(orders) {
+            const targetStates = ['Cotización','Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
+            const labels = targetStates;
+            const data = labels.map(s => orders.filter(o => o.status === s).length);
+            if (chartStatus) try { chartStatus.destroy(); } catch(e) {}
+            const ctx = document.getElementById('workload-chart');
+            if (!ctx) return;
+            chartStatus = new Chart(ctx, {
                 type: 'bar',
-                data: { labels, datasets: [{ label: 'Ingresos Mensuales', data, backgroundColor: 'rgba(59, 130, 246, 0.7)' }] },
-                options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: true }
+                data: { labels, datasets: [{ label: 'Órdenes en Proceso', data, backgroundColor: labels.map(l => statusConfig[l]?.color || 'rgba(156,163,175,0.7)') }] },
+                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, precision: 0 } } }
             });
+        }
+
+        function updateAgingReport(orders) {
+            const criticalStates = ['Autorizado en reparación','Entregado pendiente de pago'];
+            const rows = orders
+                .filter(o => criticalStates.includes(o.status))
+                .map(o => {
+                    const created = o.createdAt ? new Date(o.createdAt) : null;
+                    const days = created ? Math.floor((Date.now() - created.getTime()) / (1000*60*60*24)) : 0;
+                    return { id: o.numericId, client: o.client?.name || '', status: o.status, days, total: Number(o.total||0) };
+                })
+                .filter(r => r.days > 15)
+                .sort((a,b) => b.days - a.days);
+            const tbody = document.getElementById('aging-table');
+            if (!tbody) return;
+            tbody.innerHTML = rows.length ? rows.map(r => `
+                <tr>
+                    <td class="px-4 py-2 font-semibold">${r.id}</td>
+                    <td class="px-4 py-2">${r.client}</td>
+                    <td class="px-4 py-2">${r.status}</td>
+                    <td class="px-4 py-2">${r.days}</td>
+                    <td class="px-4 py-2">${formatCurrency(r.total)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">No hay órdenes con más de 15 días en los estados seleccionados</td></tr>';
         }
 
         // --- FUNCIONES PARA TABLAS DEL DASHBOARD ---
