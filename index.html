@@ -141,7 +141,9 @@
                 <!-- Carga de trabajo -->
                 <div class="bg-white p-6 rounded-lg shadow mb-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribución de Carga de Trabajo</h3>
-                    <canvas id="workload-chart" height="140"></canvas>
+                    <div id="workload-chart-wrapper" style="width:100%; max-height:420px; height:260px; position:relative;">
+                        <canvas id="workload-chart" style="width:100% !important; height:100% !important; display:block;" ></canvas>
+                    </div>
                 </div>
 
                 <!-- Reporte de Antigüedad de Órdenes -->
