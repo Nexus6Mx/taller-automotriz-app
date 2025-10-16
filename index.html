@@ -1133,8 +1133,9 @@
         }
 
         function updateWorkloadChart(orders) {
-            // Include all known states from statusConfig for full distribution
-            const labels = Object.keys(statusConfig);
+            // Include all known states from statusConfig for full distribution,
+            // but exclude 'Entregado Pagado' from the workload distribution chart
+            const labels = Object.keys(statusConfig).filter(l => l !== 'Entregado Pagado');
             const data = labels.map(s => orders.filter(o => o.status === s).length);
             if (chartStatus) try { chartStatus.destroy(); } catch(e) {}
             const ctx = document.getElementById('workload-chart');
