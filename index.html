@@ -41,13 +41,20 @@
             transition: transform 180ms ease, opacity 180ms ease;
             opacity: 0.9;
         }
-        /* Dashboard KPI responsive sizing: left/right 40%, center 20% on md+ */
+        /* Dashboard KPI responsive sizing: left 30%, center 25%, right 45% on md+ */
         .kpi-row { display: block; }
         .kpi-left, .kpi-center, .kpi-right { width: 100%; }
         @media (min-width: 768px) {
             .kpi-row { display: flex; gap: 1.5rem; align-items: stretch; }
-            .kpi-left, .kpi-right { flex: 0 0 40%; }
-            .kpi-center { flex: 0 0 20%; }
+            .kpi-left { flex: 0 0 30%; }
+            .kpi-center { flex: 0 0 25%; }
+            .kpi-right { flex: 0 0 45%; }
+
+            /* Center KPI content for better visual balance */
+            .kpi-left, .kpi-center { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+            /* For the right card keep sparkline left but center the numeric block vertically */
+            .kpi-right > .flex.items-start { align-items: center; }
+            .kpi-right .flex-1 { display:flex; flex-direction:column; justify-content:center; }
         }
     </style>
 </head>
