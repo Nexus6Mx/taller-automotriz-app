@@ -41,6 +41,14 @@
             transition: transform 180ms ease, opacity 180ms ease;
             opacity: 0.9;
         }
+        /* Dashboard KPI responsive sizing: left/right 40%, center 20% on md+ */
+        .kpi-row { display: block; }
+        .kpi-left, .kpi-center, .kpi-right { width: 100%; }
+        @media (min-width: 768px) {
+            .kpi-row { display: flex; gap: 1.5rem; align-items: stretch; }
+            .kpi-left, .kpi-right { flex: 0 0 40%; }
+            .kpi-center { flex: 0 0 20%; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -83,9 +91,9 @@
             <!-- Sección: Dashboard -->
              <div id="dashboard" class="tab-content active">
                 <!-- KPIs Gerenciales -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
+                <div class="kpi-row mb-6">
                     <!-- Accounts receivable: denser layout with complementary stat -->
-                    <div class="bg-white p-4 md:p-6 rounded-lg shadow">
+                    <div class="kpi-left bg-white p-4 md:p-6 rounded-lg shadow">
                         <div class="flex items-start justify-between">
                             <div>
                                 <h3 class="text-sm md:text-lg font-medium text-gray-500">Cuentas por Cobrar</h3>
@@ -98,7 +106,7 @@
                     </div>
 
                     <!-- In-process: show main count and diagnostic count -->
-                    <div class="bg-white p-4 md:p-6 rounded-lg shadow">
+                    <div class="kpi-center bg-white p-4 md:p-6 rounded-lg shadow">
                         <div class="flex items-start justify-between">
                             <div>
                                 <h3 class="text-sm md:text-lg font-medium text-gray-500">Órdenes en Proceso</h3>
@@ -111,7 +119,7 @@
                     </div>
 
                     <!-- Income: compact header with current month and percent change, small 3-month mini values and sparkline -->
-                    <div class="bg-white p-4 md:p-6 rounded-lg shadow">
+                    <div class="kpi-right bg-white p-4 md:p-6 rounded-lg shadow">
                         <h3 class="text-sm md:text-lg font-medium text-gray-500">Ingresos (últimos 3 meses)</h3>
                         <div class="flex items-start gap-4 mt-3">
                             <!-- Left: sparkline (fixed width) -->
