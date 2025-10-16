@@ -1173,7 +1173,10 @@
                         backgroundColor: bgColors,
                         borderRadius: 8,
                         borderSkipped: false,
-                        barThickness: Math.max(12, Math.floor((ctx.clientWidth || 300) / Math.max(labels.length, 6)))
+                        // Stabilize sizing to avoid recalculations that can trigger layout thrashing
+                        maxBarThickness: 48,
+                        barPercentage: 0.85,
+                        categoryPercentage: 0.9
                     }]
                 },
                 options: {
@@ -1183,6 +1186,7 @@
                         legend: { display: false },
                         tooltip: { mode: 'index', intersect: false }
                     },
+                    animation: { duration: 0 },
                     scales: {
                         x: {
                             ticks: {
