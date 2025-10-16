@@ -95,9 +95,22 @@
                         <p class="text-xs text-gray-500 mt-1">Recibido, Diagnostico, Autorizado en reparación, Preparacion para entrega</p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500">Ingreso del Mes</h3>
-                        <p id="kpi-month-income" class="mt-1 text-4xl font-bold text-green-600">$0.00</p>
-                        <p class="text-xs text-gray-500 mt-1">Facturado o Entregado Pagado en el mes</p>
+                        <h3 class="text-lg font-medium text-gray-500">Ingresos últimos 3 meses</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+                            <div>
+                                <div id="kpi-mi-label-2" class="text-xs text-gray-500">Mes-2</div>
+                                <div id="kpi-mi-2" class="text-2xl font-bold text-green-600">$0.00</div>
+                            </div>
+                            <div>
+                                <div id="kpi-mi-label-1" class="text-xs text-gray-500">Mes-1</div>
+                                <div id="kpi-mi-1" class="text-2xl font-bold text-green-600">$0.00</div>
+                            </div>
+                            <div>
+                                <div id="kpi-mi-label-0" class="text-xs text-gray-500">Mes actual</div>
+                                <div id="kpi-mi-0" class="text-2xl font-bold text-green-600">$0.00</div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Estados: Facturado y Entregado Pagado</p>
                     </div>
                 </div>
 
@@ -966,23 +979,36 @@
 
             // Ingreso del mes: estados Facturado o Entregado Pagado en el mes actual (usamos createdAt si no hay fecha específica)
             const now = new Date();
-            const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-            const monthIncome = orders
+            const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            // Build array for last 3 months [m-2, m-1, m]
+            const buckets = [2,1,0].map(delta => {
+                const d = new Date(now.getFullYear(), now.getMonth() - delta, 1);
+                const ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+                return { ym, label: monthNames[d.getMonth()], total: 0 };
+            });
+            orders
                 .filter(o => ['Facturado','Entregado Pagado'].includes(o.status))
-                .filter(o => {
-                    if (!o.createdAt) return false;
+                .forEach(o => {
+                    if (!o.createdAt) return;
                     const d = new Date(o.createdAt);
                     const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-                    return key === ym;
-                })
-                .reduce((sum, o) => sum + Number(o.total || 0), 0);
+                    const bucket = buckets.find(b => b.ym === key);
+                    if (bucket) bucket.total += Number(o.total||0);
+                });
 
             const k1 = document.getElementById('kpi-accounts-receivable');
             const k2 = document.getElementById('kpi-in-process');
-            const k3 = document.getElementById('kpi-month-income');
             if (k1) k1.textContent = formatCurrency(accountsReceivable);
             if (k2) k2.textContent = String(inProcessCount);
-            if (k3) k3.textContent = formatCurrency(monthIncome);
+            // Update 3-month income KPIs
+            const ids = [0,1,2];
+            ids.forEach(idx => {
+                const b = buckets.find((_,bi) => bi === idx);
+                const lbl = document.getElementById(`kpi-mi-label-${idx}`);
+                const val = document.getElementById(`kpi-mi-${idx}`);
+                if (lbl) lbl.textContent = b?.label || '';
+                if (val) val.textContent = formatCurrency(b?.total || 0);
+            });
 
             // B) Workload bar chart
             updateWorkloadChart(orders);
@@ -992,8 +1018,8 @@
         }
 
         function updateWorkloadChart(orders) {
-            const targetStates = ['Cotización','Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
-            const labels = targetStates;
+            // Include all known states from statusConfig for full distribution
+            const labels = Object.keys(statusConfig);
             const data = labels.map(s => orders.filter(o => o.status === s).length);
             if (chartStatus) try { chartStatus.destroy(); } catch(e) {}
             const ctx = document.getElementById('workload-chart');
