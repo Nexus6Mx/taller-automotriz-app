@@ -56,6 +56,18 @@
             .kpi-right > .flex.items-start { align-items: center; }
             .kpi-right .flex-1 { display:flex; flex-direction:column; justify-content:center; }
         }
+        /* Make box-sizing predictable so padding doesn't cause overflow */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        /* Income card specific tweaks to avoid horizontal overflow */
+        .kpi-right .w-28 { width: 64px !important; }
+        .kpi-right .grid { gap: 0.5rem; }
+        .kpi-right .grid div { padding: 0; }
+        .kpi-right .text-sm { font-size: 0.78rem; }
+        /* If card gets narrow, stack months vertically */
+        @media (max-width: 1024px) {
+            .kpi-right .grid { grid-template-columns: 1fr !important; }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -130,7 +142,7 @@
                         <h3 class="text-sm md:text-lg font-medium text-gray-500">Ingresos (últimos 3 meses)</h3>
                         <div class="flex items-start gap-4 mt-3">
                             <!-- Left: sparkline (fixed width) -->
-                            <div class="flex-shrink-0 w-28 h-14 flex items-center justify-center">
+                            <div class="flex-shrink-0 w-20 h-14 flex items-center justify-center">
                                 <canvas id="income-3m-chart" style="width:100% !important; height:100% !important; display:block;" ></canvas>
                             </div>
 
@@ -143,7 +155,7 @@
                                     </div>
                                 </div>
 
-                                <div class="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-600">
+                                <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600">
                                     <div>
                                         <div id="kpi-mi-label-2" class="text-xs text-gray-400">Mes-2</div>
                                         <div id="kpi-mi-2" class="text-sm font-semibold text-green-600">$0.00</div>
