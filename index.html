@@ -1117,16 +1117,49 @@
             // Create background color array based on palette, fallback to neutral
             const bgColors = labels.map(l => palette[l] || 'rgba(156,163,175,0.85)');
 
-            // Custom plugin to draw soft shadow behind bars (subtle depth)
+            // Custom plugin to draw soft shadow behind bars (subtle depth) using afterDatasetsDraw
             const barShadowPlugin = {
                 id: 'barShadowPlugin',
-                beforeDatasetDraw(chart, args, options) {
-                    const {ctx, chartArea: {top, bottom, left, right}} = chart;
-                    ctx.save();
-                    // We'll draw per-bar shadows in the dataset draw phase instead for accuracy
-                },
-                afterDraw(chart, args, options) {
-                    // no-op (kept for potential extension)
+                afterDatasetsDraw(chart, args, options) {
+                    const ctx2 = chart.ctx;
+                    ctx2.save();
+                    try {
+                        chart.data.datasets.forEach((dataset, dsIndex) => {
+                            const meta = chart.getDatasetMeta(dsIndex);
+                            if (!meta || !meta.data) return;
+                            meta.data.forEach((bar) => {
+                                // Use bar properties directly to avoid internal getProps that may cause side-effects
+                                const x = bar.x;
+                                const y = bar.y;
+                                const base = bar.base;
+                                const width = bar.width || (bar.right - bar.left) || 0;
+                                const height = Math.abs(base - y);
+                                // Draw a subtle rounded shadow rect under the bar
+                                const shadowHeight = Math.max(6, Math.min(12, height * 0.12));
+                                ctx2.fillStyle = 'rgba(0,0,0,0.08)';
+                                const rx = 4; // corner radius for shadow (rounded)
+                                const sx = x - width/2;
+                                const sy = Math.min(y, base) - shadowHeight/2 + 2;
+                                // Draw rounded rect (simple) by path
+                                ctx2.beginPath();
+                                ctx2.moveTo(sx + rx, sy);
+                                ctx2.lineTo(sx + width - rx, sy);
+                                ctx2.quadraticCurveTo(sx + width, sy, sx + width, sy + rx);
+                                ctx2.lineTo(sx + width, sy + shadowHeight - rx);
+                                ctx2.quadraticCurveTo(sx + width, sy + shadowHeight, sx + width - rx, sy + shadowHeight);
+                                ctx2.lineTo(sx + rx, sy + shadowHeight);
+                                ctx2.quadraticCurveTo(sx, sy + shadowHeight, sx, sy + shadowHeight - rx);
+                                ctx2.lineTo(sx, sy + rx);
+                                ctx2.quadraticCurveTo(sx, sy, sx + rx, sy);
+                                ctx2.closePath();
+                                ctx2.fill();
+                            });
+                        });
+                    } catch (e) {
+                        // Avoid throwing to not break chart rendering
+                        console.warn('barShadowPlugin draw failed', e);
+                    }
+                    ctx2.restore();
                 }
             };
 
@@ -1172,37 +1205,6 @@
                 },
                 plugins: [barShadowPlugin]
             });
-
-            // Add a subtle canvas-level shadow by drawing behind bars using Chart.js render hook
-            // We inject a lightweight afterRender function to paint soft shadows per bar
-            try {
-                const drawBarShadows = (chart) => {
-                    const ctx2 = chart.ctx;
-                    ctx2.save();
-                    chart.data.datasets.forEach((dataset, dsIndex) => {
-                        const meta = chart.getDatasetMeta(dsIndex);
-                        meta.data.forEach((bar, i) => {
-                            const {x, y, base, width, height} = bar.getProps(['x','y','base','width','height'], true);
-                            // Draw shadow rectangle slightly under the bar
-                            ctx2.fillStyle = 'rgba(0,0,0,0.08)';
-                            const shadowHeight = Math.max(6, Math.min(12, height * 0.12));
-                            ctx2.fillRect(x - width/2, Math.min(y, base) - shadowHeight/2 + 2, width, shadowHeight);
-                        });
-                    });
-                    ctx2.restore();
-                };
-
-                // Register a one-time afterRender hook
-                chartStatus.options.animation = chartStatus.options.animation || {};
-                const origOnProgress = chartStatus.options.animation.onProgress;
-                chartStatus.options.animation.onComplete = function() {
-                    drawBarShadows(chartStatus);
-                    if (typeof origOnProgress === 'function') origOnProgress.apply(this, arguments);
-                };
-            } catch (e) {
-                // Silently ignore shadow painting errors to avoid affecting functionality
-                console.warn('Workload chart shadowing failed', e);
-            }
         }
 
         function updateAgingReport(orders) {
