@@ -83,37 +83,58 @@
             <!-- Sección: Dashboard -->
              <div id="dashboard" class="tab-content active">
                 <!-- KPIs Gerenciales -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500">Cuentas por Cobrar</h3>
-                        <p id="kpi-accounts-receivable" class="mt-1 text-4xl font-bold text-red-600">$0.00</p>
-                        <p class="text-xs text-gray-500 mt-1">Suma de órdenes en "Entregado pendiente de pago"</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500">Órdenes en Proceso</h3>
-                        <p id="kpi-in-process" class="mt-1 text-4xl font-bold text-yellow-600">0</p>
-                        <p class="text-xs text-gray-500 mt-1">Recibido, Diagnostico, Autorizado en reparación, Preparacion para entrega</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-lg shadow text-center">
-                        <h3 class="text-lg font-medium text-gray-500">Ingresos últimos 3 meses</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
+                    <!-- Accounts receivable: denser layout with complementary stat -->
+                    <div class="bg-white p-4 md:p-6 rounded-lg shadow">
+                        <div class="flex items-start justify-between">
                             <div>
-                                <div id="kpi-mi-label-2" class="text-xs text-gray-500">Mes-2</div>
-                                <div id="kpi-mi-2" class="mt-1 text-xl md:text-2xl font-extrabold leading-snug text-green-600">$0.00</div>
+                                <h3 class="text-sm md:text-lg font-medium text-gray-500">Cuentas por Cobrar</h3>
+                                <p id="kpi-accounts-receivable" class="mt-2 text-3xl md:text-4xl font-bold text-red-600">$0.00</p>
+                                <p id="kpi-accounts-receivable-sub" class="mt-1 text-xs text-gray-500">Órdenes &gt;30 días: 0</p>
                             </div>
+                            <div class="text-right text-xs text-gray-400">&nbsp;</div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">Suma de órdenes en "Entregado pendiente de pago"</p>
+                    </div>
+
+                    <!-- In-process: show main count and diagnostic count -->
+                    <div class="bg-white p-4 md:p-6 rounded-lg shadow">
+                        <div class="flex items-start justify-between">
                             <div>
-                                <div id="kpi-mi-label-1" class="text-xs text-gray-500">Mes-1</div>
-                                <div id="kpi-mi-1" class="mt-1 text-xl md:text-2xl font-extrabold leading-snug text-green-600">$0.00</div>
+                                <h3 class="text-sm md:text-lg font-medium text-gray-500">Órdenes en Proceso</h3>
+                                <p id="kpi-in-process" class="mt-2 text-3xl md:text-4xl font-bold text-yellow-600">0</p>
+                                <p id="kpi-in-process-sub" class="mt-1 text-xs text-gray-500">Diagnóstico: 0</p>
                             </div>
+                            <div class="text-right text-xs text-gray-400">&nbsp;</div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">Recibido, Diagnostico, Autorizado en reparación, Preparacion para entrega</p>
+                    </div>
+
+                    <!-- Income: compact header with current month and percent change, small 3-month mini values and sparkline -->
+                    <div class="bg-white p-4 md:p-6 rounded-lg shadow">
+                        <div class="flex items-center justify-between">
                             <div>
-                                <div id="kpi-mi-label-0" class="text-xs text-gray-500">Mes actual</div>
-                                <div id="kpi-mi-0" class="mt-1 text-xl md:text-2xl font-extrabold leading-snug text-green-600">$0.00</div>
+                                <h3 class="text-sm md:text-lg font-medium text-gray-500">Ingresos (últimos 3 meses)</h3>
+                                <div class="flex items-baseline gap-3">
+                                    <div>
+                                        <div id="kpi-income-current" class="mt-2 text-3xl md:text-4xl font-extrabold text-green-600">$0.00</div>
+                                        <div id="kpi-income-change" class="text-xs text-gray-500 mt-1">% vs mes anterior: 0%</div>
+                                    </div>
+                                    <div class="hidden sm:block text-sm text-gray-600">
+                                        <div id="kpi-mi-label-2" class="text-xs text-gray-400">Mes-2</div>
+                                        <div id="kpi-mi-2" class="text-sm font-semibold text-green-600">$0.00</div>
+                                        <div id="kpi-mi-label-1" class="text-xs text-gray-400 mt-2">Mes-1</div>
+                                        <div id="kpi-mi-1" class="text-sm font-semibold text-green-600">$0.00</div>
+                                        <div id="kpi-mi-label-0" class="text-xs text-gray-400 mt-2">Mes</div>
+                                        <div id="kpi-mi-0" class="text-sm font-semibold text-green-600">$0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="w-36 h-12">
+                                <canvas id="income-3m-chart" height="48"></canvas>
                             </div>
                         </div>
-                        <div class="mt-3">
-                            <canvas id="income-3m-chart" height="80"></canvas>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Estados: Facturado y Entregado Pagado</p>
+                        <p class="text-xs text-gray-500 mt-3">Estados: Facturado y Entregado Pagado</p>
                     </div>
                 </div>
 
@@ -980,14 +1001,18 @@
             const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
             const inProcessCount = orders.filter(o => inProcessStates.includes(o.status)).length;
 
-            // Ingreso del mes: estados Facturado o Entregado Pagado en el mes actual (usamos createdAt si no hay fecha específica)
+            // Complementary counts: >30 days for 'Entregado pendiente de pago' and Diagnostico count
+            const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+            const overdue30Count = orders.filter(o => o.status === 'Entregado pendiente de pago' && o.createdAt && (new Date(o.createdAt).getTime() < thirtyDaysAgo)).length;
+            const diagnosticoCount = orders.filter(o => o.status === 'Diagnostico').length;
+
+            // Income: last 3 months buckets using createdAt as proxy for now
             const now = new Date();
             const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-            // Build array for last 3 months [m-2, m-1, m]
             const buckets = [2,1,0].map(delta => {
                 const d = new Date(now.getFullYear(), now.getMonth() - delta, 1);
                 const ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-                return { ym, label: monthNames[d.getMonth()], total: 0 };
+                return { ym, label: monthNames[d.getMonth()], total: 0, date: d };
             });
             orders
                 .filter(o => ['Facturado','Entregado Pagado'].includes(o.status))
@@ -999,43 +1024,64 @@
                     if (bucket) bucket.total += Number(o.total||0);
                 });
 
+            // Month-over-month percent change (current vs previous)
+            const current = buckets[2].total || 0;
+            const previous = buckets[1].total || 0;
+            const percentChange = previous === 0 ? (current === 0 ? 0 : 100) : ((current - previous) / Math.abs(previous) * 100);
+
+            // Update DOM
             const k1 = document.getElementById('kpi-accounts-receivable');
+            const k1sub = document.getElementById('kpi-accounts-receivable-sub');
             const k2 = document.getElementById('kpi-in-process');
+            const k2sub = document.getElementById('kpi-in-process-sub');
             if (k1) k1.textContent = formatCurrency(accountsReceivable);
+            if (k1sub) k1sub.textContent = `Órdenes >30 días: ${overdue30Count}`;
             if (k2) k2.textContent = String(inProcessCount);
-            // Update 3-month income KPIs
-            const ids = [0,1,2];
-            ids.forEach(idx => {
-                const b = buckets.find((_,bi) => bi === idx);
-                const lbl = document.getElementById(`kpi-mi-label-${idx}`);
-                const val = document.getElementById(`kpi-mi-${idx}`);
+            if (k2sub) k2sub.textContent = `Diagnóstico: ${diagnosticoCount}`;
+
+            // Update small 3-month values
+            [0,1,2].forEach(i => {
+                const lbl = document.getElementById(`kpi-mi-label-${i}`);
+                const val = document.getElementById(`kpi-mi-${i}`);
+                const b = buckets[i];
                 if (lbl) lbl.textContent = b?.label || '';
-                if (val) {
-                    val.textContent = formatCurrency(b?.total || 0);
-                    val.title = `${b?.label || ''}: ${formatCurrency(b?.total || 0)}`;
-                }
+                if (val) val.textContent = formatCurrency(b?.total || 0);
             });
 
-            // Render/update small horizontal bar for last 3 months income
+            // Update income current and percent change
+            const kIncome = document.getElementById('kpi-income-current');
+            const kIncomeChange = document.getElementById('kpi-income-change');
+            if (kIncome) kIncome.textContent = formatCurrency(current);
+            if (kIncomeChange) {
+                const sign = percentChange > 0 ? '+' : (percentChange < 0 ? '' : '');
+                kIncomeChange.textContent = `% vs mes anterior: ${sign}${percentChange.toFixed(1)}%`;
+                kIncomeChange.title = `Mes anterior: ${formatCurrency(previous)} - Actual: ${formatCurrency(current)}`;
+            }
+
+            // Render/update compact sparkline-like chart for last 3 months
             try { if (chartIncome3m) chartIncome3m.destroy(); } catch(e) {}
             const cIncome = document.getElementById('income-3m-chart');
             if (cIncome) {
                 chartIncome3m = new Chart(cIncome, {
-                    type: 'bar',
+                    type: 'line',
                     data: {
                         labels: buckets.map(b => b.label),
                         datasets: [{
-                            label: 'Ingresos',
                             data: buckets.map(b => b.total),
-                            backgroundColor: 'rgba(34, 197, 94, 0.6)'
+                            borderColor: 'rgba(34,197,94,0.9)',
+                            backgroundColor: 'rgba(34,197,94,0.12)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0
                         }]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
-                        indexAxis: 'y',
-                        scales: { x: { beginAtZero: true } },
-                        plugins: { legend: { display: false } }
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+                        elements: { line: { borderWidth: 1.5 } },
+                        interaction: { intersect: false }
                     }
                 });
             }
@@ -1054,11 +1100,109 @@
             if (chartStatus) try { chartStatus.destroy(); } catch(e) {}
             const ctx = document.getElementById('workload-chart');
             if (!ctx) return;
+
+            // Define an intentional palette mapping for business meaning (cold -> warm -> alert)
+            const palette = {
+                'Cotización': 'rgba(148,163,184,0.9)',          // soft gray-blue
+                'Recibido': 'rgba(59,130,246,0.9)',            // blue
+                'Diagnostico': 'rgba(99,102,241,0.9)',         // indigo/purple
+                'Autorizado en reparación': 'rgba(16,185,129,0.9)', // bright green
+                'Preparacion para entrega': 'rgba(250,204,21,0.95)', // amber
+                'Entregado pendiente de pago': 'rgba(239,68,68,0.9)', // red
+                'En Facturación': 'rgba(6,182,212,0.9)',       // cyan
+                'Facturado': 'rgba(14,165,233,0.9)',           // darker cyan/blue
+                'Entregado Pagado': 'rgba(5,150,105,0.9)'      // dark green
+            };
+
+            // Create background color array based on palette, fallback to neutral
+            const bgColors = labels.map(l => palette[l] || 'rgba(156,163,175,0.85)');
+
+            // Custom plugin to draw soft shadow behind bars (subtle depth)
+            const barShadowPlugin = {
+                id: 'barShadowPlugin',
+                beforeDatasetDraw(chart, args, options) {
+                    const {ctx, chartArea: {top, bottom, left, right}} = chart;
+                    ctx.save();
+                    // We'll draw per-bar shadows in the dataset draw phase instead for accuracy
+                },
+                afterDraw(chart, args, options) {
+                    // no-op (kept for potential extension)
+                }
+            };
+
             chartStatus = new Chart(ctx, {
                 type: 'bar',
-                data: { labels, datasets: [{ label: 'Órdenes en Proceso', data, backgroundColor: labels.map(l => statusConfig[l]?.color || 'rgba(156,163,175,0.7)') }] },
-                options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true, precision: 0 } } }
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Órdenes en Proceso',
+                        data,
+                        backgroundColor: bgColors,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                        barThickness: Math.max(12, Math.floor((ctx.clientWidth || 300) / Math.max(labels.length, 6)))
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0,
+                                autoSkip: false,
+                                callback: function(value, index, ticks) {
+                                    // Shorten long labels if necessary
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 16 ? label.substring(0,14) + '…' : label;
+                                }
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        }
+                    }
+                },
+                plugins: [barShadowPlugin]
             });
+
+            // Add a subtle canvas-level shadow by drawing behind bars using Chart.js render hook
+            // We inject a lightweight afterRender function to paint soft shadows per bar
+            try {
+                const drawBarShadows = (chart) => {
+                    const ctx2 = chart.ctx;
+                    ctx2.save();
+                    chart.data.datasets.forEach((dataset, dsIndex) => {
+                        const meta = chart.getDatasetMeta(dsIndex);
+                        meta.data.forEach((bar, i) => {
+                            const {x, y, base, width, height} = bar.getProps(['x','y','base','width','height'], true);
+                            // Draw shadow rectangle slightly under the bar
+                            ctx2.fillStyle = 'rgba(0,0,0,0.08)';
+                            const shadowHeight = Math.max(6, Math.min(12, height * 0.12));
+                            ctx2.fillRect(x - width/2, Math.min(y, base) - shadowHeight/2 + 2, width, shadowHeight);
+                        });
+                    });
+                    ctx2.restore();
+                };
+
+                // Register a one-time afterRender hook
+                chartStatus.options.animation = chartStatus.options.animation || {};
+                const origOnProgress = chartStatus.options.animation.onProgress;
+                chartStatus.options.animation.onComplete = function() {
+                    drawBarShadows(chartStatus);
+                    if (typeof origOnProgress === 'function') origOnProgress.apply(this, arguments);
+                };
+            } catch (e) {
+                // Silently ignore shadow painting errors to avoid affecting functionality
+                console.warn('Workload chart shadowing failed', e);
+            }
         }
 
         function updateAgingReport(orders) {
