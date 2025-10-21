@@ -17,11 +17,15 @@ function generate_order_pdf($data) {
 
         // Encabezado con Logo y Título
         if (!empty($d->logoUrl)) {
-            $logo = $d->logoUrl;
-            $allowUrlFopen = ini_get('allow_url_fopen');
-            // Permitir solo rutas locales o URLs si allow_url_fopen está habilitado
+            $logo = (string)$d->logoUrl;
+            $allowUrlFopen = (bool)ini_get('allow_url_fopen');
             $isRemote = (stripos($logo, 'http://') === 0 || stripos($logo, 'https://') === 0);
-            if (!$isRemote || $allowUrlFopen) {
+            // Validar extensión soportada por FPDF sin GD (permitir jpg/jpeg/png)
+            $path = parse_url($logo, PHP_URL_PATH);
+            $ext = strtolower(pathinfo($path ?? '', PATHINFO_EXTENSION));
+            $allowed = in_array($ext, ['jpg','jpeg','png'], true);
+            if ($allowed && (!$isRemote || $allowUrlFopen)) {
+                // Intentar insertar; suprimir avisos, si falla se omite el logo
                 @ $pdf->Image($logo, 10, 8, 33);
             }
         }
