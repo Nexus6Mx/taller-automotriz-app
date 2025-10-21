@@ -10,10 +10,14 @@ function generate_order_pdf($data) {
 
         class PDFHelper extends FPDF { function Header() {} function Footer() {} }
 
-        $pdf = new PDFHelper('P','mm','Letter');
-        $pdf->AddPage();
-        $pdf->SetFont('Arial','', 10);
-        $pdf->SetAutoPageBreak(true, 10);
+    $pdf = new PDFHelper('P','mm','Letter');
+    // Márgenes consistentes y salto automático
+    $pdf->SetMargins(10, 10, 10);
+    $pdf->SetAutoPageBreak(true, 10);
+    $pdf->AddPage();
+    $pdf->SetFont('Arial','', 10);
+    // Ancho usable considerando márgenes
+    $usableWidth = $pdf->GetPageWidth() - $pdf->lMargin - $pdf->rMargin;
 
         // Encabezado con Logo y Título
         if (!empty($d->logoUrl)) {
@@ -37,32 +41,34 @@ function generate_order_pdf($data) {
         $pdf->SetFont('Arial','B',12);
         $label = (isset($d->status) && $d->status === 'Cotizaci\u00f3n') ? 'Cotizaci\u00f3n: ' : 'No. de Orden: ';
         $numericId = isset($d->numericId) ? $d->numericId : (isset($d->numeric_id) ? $d->numeric_id : '0');
-        $pdf->Cell(190, 8, $label . $numericId, 1, 1, 'R');
+    $pdf->Cell($usableWidth, 8, $label . $numericId, 1, 1, 'R');
         $pdf->Ln(5);
 
         // Datos del Cliente y Vehiculo
         $pdf->SetFont('Arial','B', 9);
         $clientName = isset($d->client->name) ? $d->client->name : (isset($d->client['name']) ? $d->client['name'] : '');
         $vehicleBrand = isset($d->vehicle->brand) ? $d->vehicle->brand : (isset($d->vehicle['brand']) ? $d->vehicle['brand'] : '');
-        $pdf->Cell(95, 6, 'CLIENTE: ' . utf8_decode($clientName), 'LTR');
-        $pdf->Cell(95, 6, 'MARCA/MODELO: ' . utf8_decode($vehicleBrand), 'LTR', 1);
+    $half = $usableWidth / 2;
+    $pdf->Cell($half, 6, 'CLIENTE: ' . utf8_decode($clientName), 'LTR');
+    $pdf->Cell($half, 6, 'MARCA/MODELO: ' . utf8_decode($vehicleBrand), 'LTR', 1);
         $pdf->SetFont('Arial','', 9);
         $clientAddress = isset($d->client->address) ? $d->client->address : '';
         $vehiclePlates = isset($d->vehicle->plates) ? $d->vehicle->plates : '';
-        $pdf->Cell(95, 6, 'DIRECCION: ' . utf8_decode($clientAddress), 'LR');
-        $pdf->Cell(95, 6, 'PLACAS: ' . utf8_decode($vehiclePlates), 'LR', 1);
+    $pdf->Cell($half, 6, 'DIRECCION: ' . utf8_decode($clientAddress), 'LR');
+    $pdf->Cell($half, 6, 'PLACAS: ' . utf8_decode($vehiclePlates), 'LR', 1);
         $clientCel = isset($d->client->cel) ? $d->client->cel : '';
         $vehicleYear = isset($d->vehicle->year) ? $d->vehicle->year : '';
         $vehicleKm = isset($d->vehicle->km) ? $d->vehicle->km : '';
-        $pdf->Cell(95, 6, 'TELEFONO: ' . utf8_decode($clientCel), 'LRB');
-        $pdf->Cell(95, 6, 'ANO: ' . utf8_decode($vehicleYear) . ' / KM: ' . utf8_decode($vehicleKm), 'LRB', 1);
+    $pdf->Cell($half, 6, 'TELEFONO: ' . utf8_decode($clientCel), 'LRB');
+    $pdf->Cell($half, 6, 'ANO: ' . utf8_decode($vehicleYear) . ' / KM: ' . utf8_decode($vehicleKm), 'LRB', 1);
         $pdf->Ln(5);
 
         // Tabla de conceptos
-        $pdf->SetFont('Arial','B',10);
-        $pdf->Cell(20, 7, 'CANT', 1, 0, 'C');
-        $pdf->Cell(130, 7, 'DESCRIPCION', 1, 0, 'C');
-        $pdf->Cell(40, 7, 'IMPORTE', 1, 1, 'C');
+    $pdf->SetFont('Arial','B',10);
+    $wQty = 20; $wAmt = 40; $wDesc = $usableWidth - $wQty - $wAmt; if ($wDesc < 60) $wDesc = max(60, $usableWidth - $wQty - $wAmt);
+    $pdf->Cell($wQty, 7, 'CANT', 1, 0, 'C');
+    $pdf->Cell($wDesc, 7, 'DESCRIPCION', 1, 0, 'C');
+    $pdf->Cell($wAmt, 7, 'IMPORTE', 1, 1, 'C');
         $pdf->SetFont('Arial','',10);
 
         $items = [];
@@ -71,18 +77,18 @@ function generate_order_pdf($data) {
             $qty = isset($item->qty) ? $item->qty : (isset($item['qty']) ? $item['qty'] : '');
             $description = isset($item->description) ? $item->description : (isset($item['description']) ? $item['description'] : '');
             $importe = isset($item->price) ? $item->price : (isset($item['price']) ? $item['price'] : 0);
-            $pdf->Cell(20, 7, $qty, 1, 0, 'C');
-            $pdf->Cell(130, 7, utf8_decode($description), 1, 0, 'L');
-            $pdf->Cell(40, 7, '$' . number_format($importe, 2), 1, 1, 'R');
+            $pdf->Cell($wQty, 7, $qty, 1, 0, 'C');
+            $pdf->Cell($wDesc, 7, utf8_decode($description), 1, 0, 'L');
+            $pdf->Cell($wAmt, 7, '$' . number_format($importe, 2), 1, 1, 'R');
         }
         $pdf->Ln(5);
 
         // Observaciones y Totales
-        $pdf->SetFont('Arial','B',10);
-        $pdf->Cell(0, 7, 'Observaciones:', 'LTR', 1);
-        $pdf->SetFont('Arial','',10);
-        $observations = isset($d->observations) ? $d->observations : '';
-        $pdf->MultiCell(190, 5, utf8_decode($observations), 'LBR');
+    $pdf->SetFont('Arial','B',10);
+    $pdf->Cell(0, 6, 'Observaciones:', 0, 1);
+    $pdf->SetFont('Arial','',10);
+    $observations = isset($d->observations) ? $d->observations : '';
+    $pdf->MultiCell($usableWidth, 5, utf8_decode($observations), 1);
 
         $subtotal = isset($d->subtotal) ? $d->subtotal : 0;
         $iva = isset($d->iva) ? $d->iva : 0;
@@ -90,15 +96,15 @@ function generate_order_pdf($data) {
         $ivaApplied = isset($d->ivaApplied) ? $d->ivaApplied : (isset($d->iva) && $d->iva > 0);
 
         $pdf->SetFont('Arial','B',10);
-        $pdf->Cell(130, 7, '', 0, 0);
+        $pdf->Cell($usableWidth - 60, 7, '', 0, 0);
         $pdf->Cell(30, 7, 'SUBTOTAL', 1, 0, 'R');
         $pdf->Cell(30, 7, '$' . number_format($subtotal, 2), 1, 1, 'R');
         if($ivaApplied) {
-            $pdf->Cell(130, 7, '', 0, 0);
+            $pdf->Cell($usableWidth - 60, 7, '', 0, 0);
             $pdf->Cell(30, 7, 'IVA (16%)', 1, 0, 'R');
             $pdf->Cell(30, 7, '$' . number_format($iva, 2), 1, 1, 'R');
         }
-        $pdf->Cell(130, 7, '', 0, 0);
+        $pdf->Cell($usableWidth - 60, 7, '', 0, 0);
         $pdf->Cell(30, 7, 'TOTAL', 1, 0, 'R');
         $pdf->Cell(30, 7, '$' . number_format($total, 2), 1, 1, 'R');
 
