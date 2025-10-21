@@ -146,7 +146,14 @@ try {
         echo json_encode(['success' => false, 'message' => 'PDF no encontrado en servidor']);
         exit;
     }
-    $pdfContent = file_get_contents($pdfPath);
+    $pdfContent = @file_get_contents($pdfPath);
+    if ($pdfContent === false) {
+        $err = error_get_last();
+        log_send_email('PDF read failed: ' . ($err['message'] ?? 'unknown') . ' | path=' . $pdfPath);
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'No se pudo leer el PDF generado']);
+        exit;
+    }
     log_send_email('PDF generated, size: ' . strlen($pdfContent));
 
     // Enviar email
