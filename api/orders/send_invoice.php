@@ -160,44 +160,24 @@ try {
         'logoUrl' => 'https://errautomotriz.com/assets/images/err.gif'
     ];
 
-    // generate PDF using FPDF (same as send_email)
-    if (!file_exists('../../fpdf186/fpdf.php')) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Librería FPDF no encontrada']);
-        exit;
-    }
-    require_once '../../fpdf186/fpdf.php';
-
-    class PDF2 extends FPDF { function Header() {} function Footer() {} }
-    $pdf = new PDF2('P','mm','Letter');
-    $pdf->AddPage();
-    $pdf->SetFont('Arial','',10);
-    $pdf->Cell(0,7,'ERR Automotriz',0,1,'C');
-    $pdf->SetFont('Arial','B',12);
-    $label = ($orderData['status'] === 'Cotización') ? 'Cotización: ' : 'No. de Orden: ';
-    $pdf->Cell(190,8,$label . $orderData['numericId'],1,1,'R');
-    $pdf->Ln(4);
-    $pdf->SetFont('Arial','',10);
-    $pdf->Cell(0,5,'Cliente: ' . $orderData['client']['name'],0,1);
-    $pdf->Cell(0,5,'Email: ' . $orderData['client']['email'],0,1);
-    $pdf->Ln(4);
-    $pdf->SetFont('Arial','B',9);
-    $pdf->Cell(80,6,'Descripcion',1);
-    $pdf->Cell(20,6,'Cant.',1);
-    $pdf->Cell(30,6,'Precio',1);
-    $pdf->Cell(30,6,'Importe',1);
-    $pdf->Ln();
-    $pdf->SetFont('Arial','',9);
-    foreach($orderData['items'] as $it){
-        $pdf->Cell(80,5,$it['description'],1);
-        $pdf->Cell(20,5,$it['qty'],1,0,'C');
-        $pdf->Cell(30,5,'$'.number_format($it['price']/$it['qty'],2),1,0,'R');
-        $pdf->Cell(30,5,'$'.number_format($it['price'],2),1,0,'R');
-        $pdf->Ln();
-    }
-
-    $pdfContent = $pdf->Output('S');
-    log_send_invoice('PDF size: ' . strlen($pdfContent));
+        // Use helper to generate and store the PDF file to ensure identical output as generar_pdf
+        require_once __DIR__ . '/pdf_helper.php';
+        $pdfResult = generate_order_pdf($orderData);
+        if (!$pdfResult['success']) {
+            log_send_invoice('PDF helper error: ' . ($pdfResult['message'] ?? 'unknown'));
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Error al generar PDF']);
+            exit;
+        }
+        $pdfPath = $pdfResult['filepath'];
+        if (!file_exists($pdfPath)) {
+            log_send_invoice('PDF file not found: ' . $pdfPath);
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'PDF no encontrado en servidor']);
+            exit;
+        }
+        $pdfContent = file_get_contents($pdfPath);
+        log_send_invoice('PDF size: ' . strlen($pdfContent));
 
     // Helpers to determine admin user and fetch recipients
     $isAdmin = false;
