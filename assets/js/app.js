@@ -21,7 +21,6 @@ class APIService {
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        
         const config = {
             ...options,
             headers: {
@@ -30,36 +29,23 @@ class APIService {
             }
         };
 
-        // Si tenemos un token de autenticación, lo añadimos a la cabecera.
         if (authToken) {
             config.headers['Authorization'] = `Bearer ${authToken}`;
         }
 
         try {
             const response = await fetch(url, config);
-            const contentType = response.headers.get('content-type') || '';
+            const raw = await response.text(); // Leer una sola vez
             let data;
-            if (contentType.includes('application/json')) {
-                try {
-                    data = await response.json();
-                } catch (e) {
-                    // Fallback: body might not be valid JSON although header says so
-                    const text = await response.text();
-                    data = { message: text };
-                }
-            } else {
-                const text = await response.text();
-                try {
-                    data = text ? JSON.parse(text) : {};
-                } catch (e) {
-                    data = { message: text };
-                }
+            try {
+                data = raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                data = { message: raw };
             }
 
             if (!response.ok) {
                 throw new Error((data && data.message) ? data.message : `Error HTTP ${response.status}`);
             }
-
             return data;
         } catch (error) {
             console.error('Error en APIService:', error);
