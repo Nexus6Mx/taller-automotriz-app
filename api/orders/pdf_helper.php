@@ -1,9 +1,24 @@
 <?php
 // Helper para generar y guardar PDF de una orden. Devuelve arreglo con success, filepath y url o message.
-require_once __DIR__ . '/../../fpdf186/fpdf.php';
 
 function generate_order_pdf($data) {
     try {
+        // Cargar FPDF de forma robusta (evitar fatales si cambian rutas)
+        $candidates = [
+            __DIR__ . '/../../fpdf186/fpdf.php',                          // api/orders -> ../../fpdf186
+            dirname(__DIR__, 2) . '/fpdf186/fpdf.php',                    // repo root/fpdf186
+            dirname(__DIR__, 1) . '/fpdf186/fpdf.php',                    // api/fpdf186 (por si acaso)
+            ($_SERVER['DOCUMENT_ROOT'] ?? '') . '/fpdf186/fpdf.php',      // docroot/fpdf186
+        ];
+        $fpdfPath = null;
+        foreach ($candidates as $p) {
+            if ($p && file_exists($p)) { $fpdfPath = $p; break; }
+        }
+        if (!$fpdfPath) {
+            return ['success' => false, 'message' => 'Librería FPDF no encontrada'];
+        }
+        require_once $fpdfPath;
+
         // Aceptar tanto objetos como arrays
         if (is_object($data)) $d = $data;
         else $d = json_decode(json_encode($data));
