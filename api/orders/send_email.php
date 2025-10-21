@@ -176,6 +176,40 @@ try {
     $phpMailerAvailable = file_exists($phpMailerPath);
     $smtpWanted = ($transport === 'smtp');
 
+    // Modo 'log': guardar EML en outbox para desarrollo
+    if ($transport === 'log') {
+        $boundary = md5(time());
+        $subjectEnc = '=?UTF-8?B?' . base64_encode($subject_raw) . '?=';
+        $fromHeader = isset($fromCfg['address']) ? $fromCfg['address'] : 'servicio@errautomotriz.online';
+
+        $eml = '';
+        $eml .= 'From: ' . $fromHeader . "\r\n";
+        $eml .= 'To: ' . $to . "\r\n";
+        $eml .= 'Subject: ' . $subjectEnc . "\r\n";
+        $eml .= 'MIME-Version: 1.0' . "\r\n";
+        $eml .= 'Content-Type: multipart/mixed; boundary="' . $boundary . '"' . "\r\n\r\n";
+        $eml .= '--' . $boundary . "\r\n";
+        $eml .= 'Content-Type: text/plain; charset=UTF-8' . "\r\n";
+        $eml .= 'Content-Transfer-Encoding: 7bit' . "\r\n\r\n";
+        $eml .= $message . "\r\n\r\n";
+        $eml .= '--' . $boundary . "\r\n";
+        $eml .= 'Content-Type: application/pdf; name="orden_' . $order['numeric_id'] . '.pdf"' . "\r\n";
+        $eml .= 'Content-Transfer-Encoding: base64' . "\r\n";
+        $eml .= 'Content-Disposition: attachment; filename="orden_' . $order['numeric_id'] . '.pdf"' . "\r\n\r\n";
+        $eml .= chunk_split(base64_encode($pdfContent)) . "\r\n";
+        $eml .= '--' . $boundary . '--';
+
+        $outbox = __DIR__ . '/../logs/outbox';
+        if (!is_dir($outbox)) @mkdir($outbox, 0755, true);
+        $fname = date('Ymd_His') . '_orden_' . $order['numeric_id'] . '.eml';
+        $fpath = $outbox . '/' . $fname;
+        @file_put_contents($fpath, $eml);
+        log_send_email('Saved EML to outbox: ' . $fpath);
+        echo json_encode(['success' => true, 'message' => 'Correo guardado en outbox (modo log)', 'file' => 'api/logs/outbox/' . $fname]);
+        log_audit($db, $user_id, 'order_email_sent', 'order', $orderId, null);
+        exit;
+    }
+
     $sent = false;
     if ($smtpWanted && $phpMailerAvailable) {
         log_send_email('Using SMTP via PHPMailer');
@@ -244,6 +278,8 @@ try {
         log_send_email('mail() result: ' . ($mailResult ? 'true' : 'false'));
         if ($mailResult) {
             $sent = true;
+        } else {
+            log_send_email('mail() failed; no SMTP or mail() available');
         }
     }
 
@@ -252,7 +288,10 @@ try {
         log_audit($db, $user_id, 'order_email_sent', 'order', $orderId, null);
     } else {
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Error al enviar el correo']);
+        echo json_encode([
+            'success' => false,
+            'message' => 'No se pudo enviar el correo. Configure api/config/mail.php (SMTP válido) o use transport = "log" en desarrollo.'
+        ]);
     }
 } catch (Exception $e) {
     http_response_code(500);
