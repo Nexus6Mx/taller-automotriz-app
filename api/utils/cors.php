@@ -4,8 +4,11 @@
 // --- CONFIGURACIÓN DE ORÍGENES PERMITIDOS (CORS) ---
 // Lista de dominios autorizados para hacer peticiones a esta API.
 $allowed_origins = [
-    'https://errautomotriz.online', // Producción
-    'http://localhost:8888'         // Desarrollo local
+    'https://errautomotriz.online',           // Producción
+    'https://www.errautomotriz.online',       // Variante con www
+    'https://app.errautomotriz.online',       // Subdominio app (si aplica)
+    'http://localhost',                       // Desarrollo local sin puerto
+    'http://localhost:8888'                   // Desarrollo local con puerto
 ];
 // ----------------------------------------------------
 

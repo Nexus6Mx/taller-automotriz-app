@@ -138,7 +138,9 @@ class APIService {
             id: parseInt(orderId) // Asegurar que el ID sea número y esté presente
         };
         const response = await this.request('/orders/update.php', {
-            method: 'PUT',
+            // Algunos hostings restringen PUT; usar POST garantiza compatibilidad
+            method: 'POST',
+            headers: { 'X-HTTP-Method-Override': 'PUT' },
             body: JSON.stringify(data)
         });
         return response;
@@ -171,7 +173,8 @@ class APIService {
 
     async updateInvoiceRecipients(emails) {
         return await this.request('/orders/invoice_recipients.php', {
-            method: 'PUT',
+            method: 'POST',
+            headers: { 'X-HTTP-Method-Override': 'PUT' },
             body: JSON.stringify({ emails })
         });
     }

@@ -8,8 +8,22 @@ $database = new Database();
 $db = $database->getConnection();
 
 // --- Verificación de Token (Seguridad) ---
-$headers = getallheaders();
-$token = isset($headers['Authorization']) ? str_replace('Bearer ', '', $headers['Authorization']) : '';
+$headers = [];
+if (function_exists('getallheaders')) {
+    $headers = getallheaders();
+} else {
+    foreach ($_SERVER as $name => $value) {
+        if (substr($name, 0, 5) == 'HTTP_') {
+            $key = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($name, 5)))));
+            $headers[$key] = $value;
+        }
+    }
+}
+$authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? ($_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+$token = $authHeader ? str_replace('Bearer ', '', $authHeader) : '';
+if (!$token && !empty($_COOKIE['authToken'])) {
+    $token = $_COOKIE['authToken'];
+}
 $user = verifyToken($db, $token);
 if (!$user) {
     http_response_code(401);
@@ -65,6 +79,12 @@ if (count((array)$data) > 2 && !isset($data->numeric_id)) {
 $db->beginTransaction();
 
 try {
+    // Validar que el usuario exista realmente (protege de tokens huérfanos)
+    $uStmt = $db->prepare("SELECT id FROM users WHERE id = :id LIMIT 1");
+    $uStmt->execute(['id' => $user_id]);
+    if ($uStmt->fetchColumn() === false) {
+        throw new Exception('Sesión inválida. Vuelve a iniciar sesión.');
+    }
     // Verificar que la orden exista antes de intentar actualizarla
     // Admin/Operador pueden actualizar cualquier orden; si se desea restringir por usuario, descomentar AND user_id = :user_id
     $check_query = "SELECT id, user_id FROM orders WHERE id = :id";
@@ -85,9 +105,9 @@ try {
         $stmt->bindParam(':status', $data->status);
         $stmt->bindParam(':id', $data->id);
         $stmt->execute();
-    $db->commit();
-    http_response_code(200);
-    echo json_encode(["success" => true, "message" => "Estado de la orden actualizado con éxito.", "status" => $data->status]);
+        $db->commit();
+        http_response_code(200);
+        echo json_encode(["success" => true, "message" => "Estado de la orden actualizado con éxito.", "status" => $data->status]);
         // Audit status change
         log_audit($db, $user_id, 'order_status_updated', 'order', $data->id, json_encode(['status' => $data->status]));
         exit();
@@ -192,8 +212,24 @@ try {
 
 } catch (Exception $e) {
     // --- Si algo falló, revertir todos los cambios ---
-    $db->rollBack();
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
+    // Log técnico para diagnóstico
+    try {
+        $logDir = __DIR__ . '/../logs';
+        if (!is_dir($logDir)) @mkdir($logDir, 0777, true);
+        $logFile = $logDir . '/order_update_error.log';
+        $context = [
+            'time' => date('c'),
+            'user_id' => isset($user_id) ? $user_id : null,
+            'order_id' => isset($data->id) ? $data->id : null,
+            'error' => $e->getMessage(),
+        ];
+        @file_put_contents($logFile, json_encode($context, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND);
+    } catch (\Throwable $t) { /* ignore logging errors */ }
+
     http_response_code(500);
-    echo json_encode(["success" => false, "message" => "Error al actualizar la orden: " . $e->getMessage()]);
+    echo json_encode(["success" => false, "message" => "No se pudo actualizar la orden. Inténtalo de nuevo o contacta a soporte."]);
 }
 ?>
