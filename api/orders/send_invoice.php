@@ -232,134 +232,75 @@ try {
         // Continue anyway; frontend may have updated it already
     }
 
-    // Envío de correo configurable
-    $mailCfg = null;
-    if (file_exists(__DIR__ . '/../config/mail.php')) {
-        $mailCfg = require __DIR__ . '/../config/mail.php';
-    } elseif (file_exists(__DIR__ . '/../config/mail.example.php')) {
-        $mailCfg = require __DIR__ . '/../config/mail.example.php';
-    }
-    $transport = is_array($mailCfg) && !empty($mailCfg['transport']) ? strtolower($mailCfg['transport']) : 'mail';
-    $fromCfg = $mailCfg['smtp']['from'] ?? ['address' => 'servicio@errautomotriz.online', 'name' => 'ERR Automotriz'];
-    $phpMailerPath = __DIR__ . '/../../PHPMailer/src/PHPMailer.php';
-    $phpMailerAvailable = file_exists($phpMailerPath);
-    $smtpWanted = ($transport === 'smtp');
-
-    // Modo 'log': guardar EML para cada destinatario y responder success
-    if ($transport === 'log') {
-        $boundary = md5(time());
-        $subjectEnc = '=?UTF-8?B?' . base64_encode($subject) . '?=';
-        $fromHeader = isset($fromCfg['address']) ? $fromCfg['address'] : 'servicio@errautomotriz.online';
-        $outbox = __DIR__ . '/../logs/outbox';
-        if (!is_dir($outbox)) @mkdir($outbox, 0755, true);
-        foreach ($toAddresses as $t) {
-            $eml = '';
-            $eml .= 'From: ' . $fromHeader . "\r\n";
-            $eml .= 'To: ' . $t . "\r\n";
-            $eml .= 'Subject: ' . $subjectEnc . "\r\n";
-            $eml .= 'MIME-Version: 1.0' . "\r\n";
-            $eml .= 'Content-Type: multipart/mixed; boundary="' . $boundary . '"' . "\r\n\r\n";
-            $eml .= '--' . $boundary . "\r\n";
-            $eml .= 'Content-Type: text/plain; charset=UTF-8' . "\r\n";
-            $eml .= 'Content-Transfer-Encoding: 7bit' . "\r\n\r\n";
-            $eml .= $bodyText . "\r\n\r\n";
-            $eml .= '--' . $boundary . "\r\n";
-            $eml .= 'Content-Type: application/pdf; name="orden_' . $order['numeric_id'] . '.pdf"' . "\r\n";
-            $eml .= 'Content-Transfer-Encoding: base64' . "\r\n";
-            $eml .= 'Content-Disposition: attachment; filename="orden_' . $order['numeric_id'] . '.pdf"' . "\r\n\r\n";
-            $eml .= chunk_split(base64_encode($pdfContent)) . "\r\n";
-            $eml .= '--' . $boundary . '--';
-
-            $fname = date('Ymd_His') . '_invoice_orden_' . $order['numeric_id'] . '_' . preg_replace('/[^a-z0-9_.-]+/i','_', $t) . '.eml';
-            @file_put_contents($outbox . '/' . $fname, $eml);
-        }
-        echo json_encode(['success'=>true,'message'=>'Solicitudes guardadas en outbox (modo log)']);
-        log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
-        exit;
-    }
-
-    $sentAll = false;
-    if ($smtpWanted && $phpMailerAvailable) {
-        require_once $phpMailerPath;
-        require_once __DIR__ . '/../../PHPMailer/src/SMTP.php';
-        require_once __DIR__ . '/../../PHPMailer/src/Exception.php';
+    // try PHPMailer
+    if (file_exists('../../PHPMailer/src/PHPMailer.php')){
+        require_once '../../PHPMailer/src/PHPMailer.php';
+        require_once '../../PHPMailer/src/SMTP.php';
+        require_once '../../PHPMailer/src/Exception.php';
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        try {
+        try{
+            $mail->isSMTP();
+            $mail->Host = 'smtp.hostinger.com';
+            $mail->SMTPAuth = true;
+            $mail->Username = 'servicio@errautomotriz.online';
+            $mail->Password = '3Errauto!';
+            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+            $mail->Port = 465;
+
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
-            $mail->isSMTP();
-            $smtp = $mailCfg['smtp'] ?? [];
-            $mail->Host = $smtp['host'] ?? 'localhost';
-            $mail->Port = $smtp['port'] ?? 25;
-            $mail->SMTPAuth = !empty($smtp['username']);
-            if ($mail->SMTPAuth) {
-                $mail->Username = $smtp['username'];
-                $mail->Password = $smtp['password'] ?? '';
-            }
-            $secure = strtolower($smtp['secure'] ?? '');
-            if ($secure === 'ssl') {
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            } elseif ($secure === 'tls') {
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            }
-            if (!empty($smtp['timeout'])) $mail->Timeout = (int)$smtp['timeout'];
 
-            $mail->setFrom($fromCfg['address'], $fromCfg['name']);
-            foreach ($toAddresses as $t) $mail->addAddress($t);
+            $mail->setFrom('servicio@errautomotriz.online','ERR Automotriz');
+            foreach($toAddresses as $t) $mail->addAddress($t);
             $mail->Subject = $subject;
             $mail->Body = $bodyText;
-            $mail->isHTML(false);
             $mail->addStringAttachment($pdfContent, 'orden_' . $order['numeric_id'] . '.pdf');
             $mail->send();
             log_send_invoice('PHPMailer send success');
-            $sentAll = true;
-        } catch (Exception $e) {
-            log_send_invoice('PHPMailer SMTP error: ' . $e->getMessage());
-            // Fallback a mail()
+            echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada con éxito']);
+            log_send_invoice('Audit: order_invoice_requested');
+            log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
+            exit;
+        } catch(Exception $e){
+            log_send_invoice('PHPMailer error: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success'=>false,'message'=>'Error enviando con PHPMailer: ' . $e->getMessage()]);
+            exit;
         }
-    } elseif ($smtpWanted && !$phpMailerAvailable) {
-        log_send_invoice('SMTP configured but PHPMailer not found, falling back to mail()');
     }
 
-    if (!$sentAll) {
-        // fallback to mail()
-        $boundary = md5(time());
-        $headers = "From: {$fromCfg['address']}\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
+    // fallback to mail()
+    $boundary = md5(time());
+    $headers = "From: servicio@errautomotriz.online\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
 
-        $subjectEnc = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+    $subjectEnc = '=?UTF-8?B?' . base64_encode($subject) . '?=';
 
-        $body = "--$boundary\r\n";
-        $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
-        $body .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
-        $body .= $bodyText . "\r\n\r\n";
-        $body .= "--$boundary\r\n";
-        $body .= "Content-Type: application/pdf; name=\"orden_{$order['numeric_id']}.pdf\"\r\n";
-        $body .= "Content-Transfer-Encoding: base64\r\n";
-        $body .= "Content-Disposition: attachment; filename=\"orden_{$order['numeric_id']}.pdf\"\r\n\r\n";
-        $body .= chunk_split(base64_encode($pdfContent)) . "\r\n";
-        $body .= "--$boundary--";
+    $body = "--$boundary\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "Content-Transfer-Encoding: 7bit\r\n\r\n";
+    $body .= $bodyText . "\r\n\r\n";
+    $body .= "--$boundary\r\n";
+    $body .= "Content-Type: application/pdf; name=\"orden_{$order['numeric_id']}.pdf\"\r\n";
+    $body .= "Content-Transfer-Encoding: base64\r\n";
+    $body .= "Content-Disposition: attachment; filename=\"orden_{$order['numeric_id']}.pdf\"\r\n\r\n";
+    $body .= chunk_split(base64_encode($pdfContent)) . "\r\n";
+    $body .= "--$boundary--";
 
-        $allSent = true;
-        foreach ($toAddresses as $t) {
-            $res = mail($t, $subjectEnc, $body, $headers);
-            log_send_invoice('mail() to ' . $t . ' => ' . ($res ? 'true' : 'false'));
-            if (!$res) $allSent = false;
-        }
-
-        if (!$allSent) {
-            log_send_invoice('mail() failed for one or more recipients; no SMTP or mail() available');
-        }
-        $sentAll = $allSent;
+    $allSent = true;
+    foreach($toAddresses as $t){
+        $res = mail($t, $subjectEnc, $body, $headers);
+        log_send_invoice('mail() to ' . $t . ' => ' . ($res ? 'true' : 'false'));
+        if (!$res) $allSent = false;
     }
 
-    if ($sentAll) {
-        echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada con éxito']);
+    if ($allSent){
+    echo json_encode(['success'=>true,'message'=>'Solicitud de facturación enviada con éxito']);
         log_audit($db, $user_id, 'order_invoice_requested', 'order', $orderId, null);
     } else {
         http_response_code(500);
-        echo json_encode(['success'=>false,'message'=>'No se pudieron enviar correos. Configure api/config/mail.php (SMTP válido) o use transport = "log" en desarrollo.']);
+        echo json_encode(['success'=>false,'message'=>'Error enviando algunas solicitudes de facturación']);
     }
 
 } catch(Exception $e){
