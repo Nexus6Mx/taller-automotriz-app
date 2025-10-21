@@ -134,9 +134,10 @@ try {
     require_once __DIR__ . '/pdf_helper.php';
     $pdfResult = generate_order_pdf($orderData);
     if (!$pdfResult['success']) {
-        log_send_email('PDF helper error: ' . ($pdfResult['message'] ?? 'unknown'));
+        $msg = $pdfResult['message'] ?? 'Error al generar PDF';
+        log_send_email('PDF helper error: ' . $msg);
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Error al generar PDF']);
+        echo json_encode(['success' => false, 'message' => $msg]);
         exit;
     }
     $pdfPath = $pdfResult['filepath'];
