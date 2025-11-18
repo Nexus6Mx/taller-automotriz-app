@@ -1,0 +1,181 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║         GUÍA PASO A PASO PARA ELIMINAR ÓRDENES DUPLICADAS                   ║
+║                     EN PHPMYADMIN (PRODUCCIÓN)                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📋 ÓRDENES A ELIMINAR:
+   - 10000 (Guadalupe, 2025-11-07)
+   - 10000 (Protector Intercontinental, 2025-11-12)
+   - 10001 (Estacionamientos Corsa ERIKA)
+   - 10002 (Estacionamientos Corsa ERIKA)
+   - 10003 (Protector Intercontinental)
+   - 10004 (Protector Intercontinental)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  PASO 0: HACER BACKUP (MUY IMPORTANTE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Abre PHPMyAdmin
+2. Selecciona tu base de datos: u185421649_gestor_ordenes
+3. Haz clic en la pestaña "Exportar"
+4. Deja las opciones por defecto
+5. Haz clic en "Continuar"
+6. Se descargará un archivo .sql (guárdalo en un lugar seguro)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 PASO 1: VERIFICAR QUÉ SE VA A ELIMINAR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. En PHPMyAdmin, selecciona tu base de datos
+2. Haz clic en la pestaña "SQL" (arriba)
+3. COPIA Y PEGA esta consulta:
+
+────────────────────────────────────────────────────────────────────────────────
+
+SELECT 
+    o.id,
+    o.numeric_id,
+    o.created_at,
+    o.client_name,
+    o.total,
+    o.status,
+    COUNT(oi.id) as num_items
+FROM orders o
+LEFT JOIN order_items oi ON o.id = oi.order_id
+WHERE 
+    (o.numeric_id = 10000 AND o.client_name = 'Guadalupe' AND DATE(o.created_at) = '2025-11-07')
+    OR
+    (o.numeric_id = 10000 AND o.client_name = 'Protector Intercontinental' AND DATE(o.created_at) = '2025-11-12')
+    OR
+    (o.numeric_id = 10001 AND o.client_name = 'Estacionamientos Corsa ERIKA')
+    OR
+    (o.numeric_id = 10002 AND o.client_name = 'Estacionamientos Corsa ERIKA')
+    OR
+    (o.numeric_id = 10003 AND o.client_name = 'Protector Intercontinental')
+    OR
+    (o.numeric_id = 10004 AND o.client_name = 'Protector Intercontinental')
+GROUP BY o.id
+ORDER BY o.numeric_id, o.created_at;
+
+────────────────────────────────────────────────────────────────────────────────
+
+4. Haz clic en el botón "Continuar"
+5. REVISA los resultados: Debes ver las 6 órdenes que se eliminarán
+6. CONFIRMA que son las correctas antes de continuar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🗑️  PASO 2A: ELIMINAR LOS ITEMS DE LAS ÓRDENES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. En la pestaña "SQL"
+2. BORRA el texto anterior
+3. COPIA Y PEGA esta consulta:
+
+────────────────────────────────────────────────────────────────────────────────
+
+DELETE oi FROM order_items oi
+INNER JOIN orders o ON oi.order_id = o.id
+WHERE 
+    (o.numeric_id = 10000 AND o.client_name = 'Guadalupe' AND DATE(o.created_at) = '2025-11-07')
+    OR
+    (o.numeric_id = 10000 AND o.client_name = 'Protector Intercontinental' AND DATE(o.created_at) = '2025-11-12')
+    OR
+    (o.numeric_id = 10001 AND o.client_name = 'Estacionamientos Corsa ERIKA')
+    OR
+    (o.numeric_id = 10002 AND o.client_name = 'Estacionamientos Corsa ERIKA')
+    OR
+    (o.numeric_id = 10003 AND o.client_name = 'Protector Intercontinental')
+    OR
+    (o.numeric_id = 10004 AND o.client_name = 'Protector Intercontinental');
+
+────────────────────────────────────────────────────────────────────────────────
+
+4. Haz clic en "Continuar"
+5. Debe decir algo como "X filas afectadas" (donde X es el número de items)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🗑️  PASO 2B: ELIMINAR LAS ÓRDENES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. En la pestaña "SQL"
+2. BORRA el texto anterior
+3. COPIA Y PEGA esta consulta:
+
+────────────────────────────────────────────────────────────────────────────────
+
+DELETE FROM orders
+WHERE 
+    (numeric_id = 10000 AND client_name = 'Guadalupe' AND DATE(created_at) = '2025-11-07')
+    OR
+    (numeric_id = 10000 AND client_name = 'Protector Intercontinental' AND DATE(created_at) = '2025-11-12')
+    OR
+    (numeric_id = 10001 AND client_name = 'Estacionamientos Corsa ERIKA')
+    OR
+    (numeric_id = 10002 AND client_name = 'Estacionamientos Corsa ERIKA')
+    OR
+    (numeric_id = 10003 AND client_name = 'Protector Intercontinental')
+    OR
+    (numeric_id = 10004 AND client_name = 'Protector Intercontinental');
+
+────────────────────────────────────────────────────────────────────────────────
+
+4. Haz clic en "Continuar"
+5. Debe decir "6 filas afectadas" o similar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ PASO 3: VERIFICAR QUE SE ELIMINARON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. En la pestaña "SQL"
+2. BORRA el texto anterior
+3. COPIA Y PEGA esta consulta:
+
+────────────────────────────────────────────────────────────────────────────────
+
+SELECT 
+    o.id,
+    o.numeric_id,
+    o.created_at,
+    o.client_name,
+    o.total,
+    o.status
+FROM orders o
+WHERE 
+    o.numeric_id IN (10000, 10001, 10002, 10003, 10004)
+ORDER BY o.numeric_id, o.created_at;
+
+────────────────────────────────────────────────────────────────────────────────
+
+4. Haz clic en "Continuar"
+5. RESULTADO ESPERADO:
+   - Si había otras órdenes legítimas con esos números, aparecerán aquí
+   - Las 6 órdenes duplicadas que mencionaste NO deben aparecer
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ ¡LISTO! ÓRDENES DUPLICADAS ELIMINADAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 NOTAS IMPORTANTES:
+
+• Este problema ya está solucionado en el código nuevo (commit ef1f103)
+• Una vez que actualices producción, no volverá a pasar
+• Los números de orden ahora se asignan automáticamente
+• El doble clic ya no crea órdenes duplicadas
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❓ ¿ALGO SALIÓ MAL?
+
+Si necesitas restaurar el backup:
+1. En PHPMyAdmin, pestaña "Importar"
+2. Selecciona el archivo .sql que descargaste en el PASO 0
+3. Haz clic en "Continuar"
+4. Todo volverá a como estaba antes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
