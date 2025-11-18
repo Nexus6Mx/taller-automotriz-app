@@ -159,7 +159,9 @@ try {
         }
     }
 
-    // --- 4. GENERAR NUEVO NUMERIC_ID PARA LA ORDEN ---
+    // --- 4. GENERAR NUEVO NUMERIC_ID PARA LA ORDEN (SIEMPRE AUTOMÁTICO) ---
+    // El numeric_id SIEMPRE se asigna automáticamente por el servidor
+    // Ignoramos cualquier valor que venga del cliente para evitar duplicados
     $stmt_id = $db->prepare("SELECT IFNULL(MAX(numeric_id), 9999) + 1 FROM orders WHERE user_id = :user_id");
     $stmt_id->execute(['user_id' => $user_id]);
     $new_order_numeric_id = $stmt_id->fetchColumn();
@@ -215,7 +217,11 @@ try {
         "message" => "Orden creada exitosamente.",
         "order_id" => $order_id,
         "numeric_id" => (int)$new_order_numeric_id,
-        "status" => $data->status
+        "data" => [
+            "id" => $order_id,
+            "numeric_id" => (int)$new_order_numeric_id,
+            "status" => $data->status ?? 'Recibido'
+        ]
     ]);
 
     // Audit

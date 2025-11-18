@@ -258,8 +258,8 @@
                         <h2 id="form-mode-title" class="text-2xl font-bold text-gray-800">Crear Nueva Orden</h2>
                         <div class="w-40">
                             <div class="relative">
-                                <input type="number" id="order-numeric-id" placeholder=" " class="peer block w-full rounded-md border border-gray-300 p-2 text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" required>
-                                <label for="order-numeric-id" class="absolute left-2 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">No. de Orden</label>
+                                <input type="number" id="order-numeric-id" placeholder=" " class="peer block w-full rounded-md border border-gray-300 p-2 text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50" readonly>
+                                <label for="order-numeric-id" class="absolute left-2 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">No. de Orden (Auto)</label>
                             </div>
                         </div>
                     </div>
@@ -1708,17 +1708,20 @@
             currentEditId = null;
             ui.formModeTitle.textContent = 'Crear Nueva Orden';
             ui.submitBtn.textContent = 'Guardar Orden';
+            ui.submitBtn.disabled = false;
             ui.cancelEditBtn.classList.add('hidden');
-            ui.orderNumericIdInput.readOnly = false;
+            ui.orderNumericIdInput.readOnly = true; // Siempre readonly en modo creación
+            ui.orderNumericIdInput.classList.add('bg-gray-50');
+            ui.orderNumericIdInput.classList.remove('bg-white');
 
-            // --- NUEVA LÓGICA PARA FOLIO CONSECUTIVO ---
+            // --- LÓGICA PARA FOLIO CONSECUTIVO (solo para vista previa) ---
             if (localData.orders && localData.orders.length > 0) {
                 const maxId = localData.orders.reduce((max, o) => Math.max(max, Number(o.numericId)), 0);
                 ui.orderNumericIdInput.value = maxId + 1;
             } else {
-                ui.orderNumericIdInput.value = 1; // Iniciar en 1 si no hay órdenes
+                ui.orderNumericIdInput.value = 10000; // Valor inicial por defecto
             }
-            // --- FIN DE LA NUEVA LÓGICA ---
+            // El backend asignará el número real, este es solo referencial
 
             updateTotals();
             createItemRow();
@@ -1766,6 +1769,15 @@
 
         async function handleFormSubmit(e) {
             e.preventDefault();
+            
+            // Prevenir doble submit
+            if (ui.submitBtn.disabled) {
+                return;
+            }
+            ui.submitBtn.disabled = true;
+            const originalText = ui.submitBtn.textContent;
+            ui.submitBtn.textContent = 'Guardando...';
+            
             const items = Array.from(document.querySelectorAll('.item-row')).map(row => ({
                 qty: parseFloat(row.querySelector('.item-qty').value),
                 description: row.querySelector('.item-desc').value.trim(),
@@ -1774,6 +1786,8 @@
 
             if (items.length === 0) {
                 alert('Debe agregar al menos un concepto.');
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.textContent = originalText;
                 return;
             }
 
@@ -1782,7 +1796,9 @@
             const total = subtotal + iva;
 
             const orderData = {
-                numeric_id: parseInt(ui.orderNumericIdInput.value, 10),
+                // No enviamos numeric_id en creación, el backend lo asigna automáticamente
+                // Solo se envía en modo edición cuando currentEditId existe
+                ...(currentEditId ? { numeric_id: parseInt(ui.orderNumericIdInput.value, 10) } : {}),
                 client: {
                     name: ui.clientNameInput.value.trim(),
                     cel: document.getElementById('client-cel').value,
@@ -1826,15 +1842,20 @@
                         throw new Error(result?.message || 'No se pudo crear la orden');
                     }
                     // Esperar un momento para asegurar que la BD se actualice
+                    const assignedNumber = result.data?.numeric_id || result.numeric_id || 'nueva';
                     setTimeout(async () => {
                         await loadData();
-                        alert(`Orden #${orderData.numeric_id} guardada. Catálogos actualizados.`);
+                        alert(`Orden #${assignedNumber} guardada con éxito. Catálogos actualizados.`);
                     }, 500);
                 }
                 resetForm();
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error al guardar la orden: ' + error.message);
+            } finally {
+                // Re-habilitar el botón en caso de error
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.textContent = originalText;
             }
         }
         
@@ -1853,6 +1874,8 @@
                     currentEditId = order.id; // Usar el ID real de la orden
                     ui.orderNumericIdInput.value = order.numericId;
                     ui.orderNumericIdInput.readOnly = true;
+                    ui.orderNumericIdInput.classList.remove('bg-gray-50');
+                    ui.orderNumericIdInput.classList.add('bg-white');
 
                     // Rellenar datos del cliente
                     document.getElementById('client-name').value = order.client.name || '';
