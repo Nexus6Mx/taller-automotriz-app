@@ -18,10 +18,12 @@ require_once '../config/database.php';
 require_once '../utils/cors.php';
 require_once '../auth/verify.php';
 require_once '../users/log_audit.php';
+require_once __DIR__ . '/pdf_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
 
+// Simple file logger for debugging (writes to api/logs/send_email.log)
 function log_send_email($text) {
     $logsDir = __DIR__ . '/../logs';
     if (!is_dir($logsDir)) @mkdir($logsDir, 0755, true);
@@ -30,6 +32,7 @@ function log_send_email($text) {
     @file_put_contents($file, $entry, FILE_APPEND | LOCK_EX);
 }
 
+// Leer el cuerpo una vez y loguearlo
 $rawInput = file_get_contents('php://input');
 log_send_email('Request received: ' . json_encode(array('method'=>$_SERVER['REQUEST_METHOD'],'payload'=>$rawInput)));
 
@@ -70,44 +73,56 @@ if (!in_array($user_role, ['Administrador', 'Operador'])) {
     exit;
 }
 
-// Obtener datos de la solicitud
+// Obtener datos de la solicitud desde la misma lectura
 $data = json_decode($rawInput);
+
 if (!$data || !isset($data->id)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'ID de orden requerido']);
     exit;
 }
-$orderId = (int)$data->id;
+
+$orderId = $data->id;
 
 try {
     // Obtener la orden
-    $stmt = $db->prepare("SELECT * FROM orders WHERE id = :id");
+    $query = "SELECT * FROM orders WHERE id = :id";
+    $stmt = $db->prepare($query);
     $stmt->bindParam(':id', $orderId);
     $stmt->execute();
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
+
     log_send_email('Order fetch result: ' . json_encode($order ?: []));
+
     if (!$order) {
         http_response_code(404);
         echo json_encode(['success' => false, 'message' => 'Orden no encontrada']);
         exit;
     }
+
     if (empty($order['client_email'])) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'El cliente no tiene correo electrónico registrado']);
         exit;
     }
 
-    // Obtener items
-    $stmtItems = $db->prepare("SELECT * FROM order_items WHERE order_id = :order_id");
+    // Obtener items de la orden
+    $queryItems = "SELECT * FROM order_items WHERE order_id = :order_id";
+    // Usar la conexión correcta ($db)
+    $stmtItems = $db->prepare($queryItems);
     $stmtItems->bindParam(':order_id', $orderId);
     $stmtItems->execute();
     $items = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
+
     log_send_email('Order items count: ' . count($items));
 
-    // Preparar datos para PDF (misma forma que generar_pdf)
+    // Preparar datos para el PDF (mismo shape que generar_pdf.php)
+    // Use the same public logo URL as Imprimir for consistency
+    $logoPath = 'https://errautomotriz.com/assets/images/err.png';
     $orderData = [
         'numericId' => $order['numeric_id'],
         'status' => $order['status'],
+        'createdAt' => $order['created_at'] ?? null,
         'client' => [
             'name' => $order['client_name'],
             'email' => $order['client_email'],
@@ -126,42 +141,21 @@ try {
         'subtotal' => $order['subtotal'],
         'iva' => $order['iva'],
         'total' => $order['total'],
+        'ivaApplied' => isset($order['iva_applied']) ? (bool)$order['iva_applied'] : null,
         'observations' => $order['observations'],
-        'logoUrl' => 'https://errautomotriz.com/assets/images/err.gif'
+        'logoUrl' => $logoPath // URL pública como en Imprimir
     ];
 
-    // Generar PDF con helper unificado (guarda archivo en /ordenes)
-    require_once __DIR__ . '/pdf_helper.php';
-    $pdfResult = generate_order_pdf($orderData);
-    if (!$pdfResult['success']) {
-        $msg = $pdfResult['message'] ?? 'Error al generar PDF';
-        log_send_email('PDF helper error: ' . $msg);
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => $msg]);
-        exit;
-    }
-    $pdfPath = $pdfResult['filepath'];
-    if (!file_exists($pdfPath)) {
-        log_send_email('PDF file not found: ' . $pdfPath);
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'PDF no encontrado en servidor']);
-        exit;
-    }
-    $pdfContent = @file_get_contents($pdfPath);
-    if ($pdfContent === false) {
-        $err = error_get_last();
-        log_send_email('PDF read failed: ' . ($err['message'] ?? 'unknown') . ' | path=' . $pdfPath);
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'No se pudo leer el PDF generado']);
-        exit;
-    }
-    log_send_email('PDF generated, size: ' . strlen($pdfContent));
+    // Generar PDF con el mismo maquetado que "Imprimir"
+    $pdfContent = generateOrderPDF($orderData);
+    log_send_email('PDF generated (helper), size: ' . strlen($pdfContent));
 
-    // Enviar email
     $to = $order['client_email'];
+    // Subject in raw UTF-8; we'll use it directly with PHPMailer and RFC2047-encode for mail()
     $subject_raw = 'Envío de su Orden de Servicio/Cotización – ERR Automotriz';
     $message = "Estimado/a cliente,\n\nPor este medio le enviamos adjunta su Orden de Servicio o Cotización solicitada.\nQuedamos atentos a cualquier comentario o duda que tenga sobre la misma.\n\nAgradecemos su confianza.\nAtentamente,\nÁrea de Servicio\nERR Automotriz";
 
+    // Usar PHPMailer si está disponible
     if (file_exists('../../PHPMailer/src/PHPMailer.php')) {
         log_send_email('PHPMailer detected');
         require_once '../../PHPMailer/src/PHPMailer.php';
@@ -170,17 +164,23 @@ try {
 
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         try {
+            // Asegurar UTF-8 en PHPMailer
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
             $mail->isSMTP();
-            $mail->Host = 'smtp.hostinger.com';
+            // SMTP settings from environment
+            $mail->Host = getenv('SMTP_HOST') ?: 'smtp.hostinger.com';
             $mail->SMTPAuth = true;
-            $mail->Username = 'servicio@errautomotriz.online';
-            $mail->Password = '3Errauto!';
+            $mail->Username = getenv('SMTP_USER') ?: '';
+            $mail->Password = getenv('SMTP_PASS') ?: '';
             $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            $mail->Port = 465;
+            $mail->Port = getenv('SMTP_PORT') ? (int)getenv('SMTP_PORT') : 465;
 
-            $mail->setFrom('servicio@errautomotriz.online', 'ERR Automotriz');
+            $fromEmail = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
+            $fromName = getenv('SMTP_FROM_NAME') ?: 'ERR Automotriz';
+            if ($fromEmail) {
+                $mail->setFrom($fromEmail, $fromName);
+            }
             $mail->addAddress($to);
             $mail->addStringAttachment($pdfContent, 'orden_' . $order['numeric_id'] . '.pdf');
 
@@ -199,11 +199,16 @@ try {
         }
     } else {
         log_send_email('PHPMailer not found, using mail()');
-        $boundary = md5(time());
-        $subject = '=?UTF-8?B?' . base64_encode($subject_raw) . '?=';
-        $headers = "From: servicio@errautomotriz.online\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
+    // Usar mail() con adjunto
+    $boundary = md5(time());
+
+    // RFC2047-encode subject for UTF-8 when using mail()
+    $subject = '=?UTF-8?B?' . base64_encode($subject_raw) . '?=';
+
+    $fromHeader = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
+    $headers = $fromHeader ? ("From: $fromHeader\r\n") : '';
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
 
         $body = "--$boundary\r\n";
         $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
@@ -226,6 +231,7 @@ try {
             echo json_encode(['success' => false, 'message' => 'Error al enviar el correo']);
         }
     }
+
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Error interno del servidor: ' . $e->getMessage()]);

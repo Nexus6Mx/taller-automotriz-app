@@ -18,6 +18,7 @@ require_once '../config/database.php';
 require_once '../utils/cors.php';
 require_once '../auth/verify.php';
 require_once '../users/log_audit.php';
+require_once __DIR__ . '/pdf_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -135,9 +136,12 @@ try {
     $items = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
 
     // prepare orderData (same shape as send_email)
+    // Use the same public logo URL as Imprimir for consistency
+    $logoPath = 'https://errautomotriz.com/assets/images/err.png';
     $orderData = [
         'numericId' => $order['numeric_id'],
         'status' => $order['status'],
+        'createdAt' => $order['created_at'] ?? null,
         'client' => [
             'name' => $order['client_name'],
             'email' => $order['client_email'],
@@ -156,36 +160,14 @@ try {
         'subtotal' => $order['subtotal'],
         'iva' => $order['iva'],
         'total' => $order['total'],
+        'ivaApplied' => isset($order['iva_applied']) ? (bool)$order['iva_applied'] : null,
         'observations' => $order['observations'],
-        'logoUrl' => 'https://errautomotriz.com/assets/images/err.gif'
+        'logoUrl' => $logoPath
     ];
 
-        // Use helper to generate and store the PDF file to ensure identical output as generar_pdf
-        require_once __DIR__ . '/pdf_helper.php';
-        $pdfResult = generate_order_pdf($orderData);
-        if (!$pdfResult['success']) {
-            $msg = $pdfResult['message'] ?? 'Error al generar PDF';
-            log_send_invoice('PDF helper error: ' . $msg);
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => $msg]);
-            exit;
-        }
-        $pdfPath = $pdfResult['filepath'];
-        if (!file_exists($pdfPath)) {
-            log_send_invoice('PDF file not found: ' . $pdfPath);
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'PDF no encontrado en servidor']);
-            exit;
-        }
-        $pdfContent = @file_get_contents($pdfPath);
-        if ($pdfContent === false) {
-            $err = error_get_last();
-            log_send_invoice('PDF read failed: ' . ($err['message'] ?? 'unknown') . ' | path=' . $pdfPath);
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'No se pudo leer el PDF generado']);
-            exit;
-        }
-        log_send_invoice('PDF size: ' . strlen($pdfContent));
+    // generate PDF using shared helper (same layout as imprimir)
+    $pdfContent = generateOrderPDF($orderData);
+    log_send_invoice('PDF size (helper): ' . strlen($pdfContent));
 
     // Helpers to determine admin user and fetch recipients
     $isAdmin = false;
@@ -206,11 +188,35 @@ try {
         log_send_invoice('Admin detection error: ' . $e->getMessage());
     }
 
+    // Ensure recipients table exists (first-run safety on production)
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS invoice_recipients (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            CONSTRAINT fk_invoice_recipients_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    } catch (Exception $e) {
+        log_send_invoice('Ensure table failed: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'No se pudo preparar la tabla de destinatarios de facturación.']);
+        exit;
+    }
+
     // recipients for billing (always use admin-configured list if available; else use current user's list)
     $targetUserId = ($adminUserId && !$isAdmin) ? $adminUserId : $user_id;
-    $stmtRecipients = $db->prepare("SELECT email FROM invoice_recipients WHERE user_id = :user_id ORDER BY id ASC");
-    $stmtRecipients->execute(['user_id' => $targetUserId]);
-    $toAddresses = $stmtRecipients->fetchAll(PDO::FETCH_COLUMN);
+    try {
+        $stmtRecipients = $db->prepare("SELECT email FROM invoice_recipients WHERE user_id = :user_id ORDER BY id ASC");
+        $stmtRecipients->execute(['user_id' => $targetUserId]);
+        $toAddresses = $stmtRecipients->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Exception $e) {
+        log_send_invoice('Recipients fetch failed: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Error al obtener correos de facturación.']);
+        exit;
+    }
     log_send_invoice('Recipients (user ' . $targetUserId . '): ' . implode(', ', $toAddresses));
 
     if (empty($toAddresses)) {
@@ -240,17 +246,21 @@ try {
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         try{
             $mail->isSMTP();
-            $mail->Host = 'smtp.hostinger.com';
+            $mail->Host = getenv('SMTP_HOST') ?: 'smtp.hostinger.com';
             $mail->SMTPAuth = true;
-            $mail->Username = 'servicio@errautomotriz.online';
-            $mail->Password = '3Errauto!';
+            $mail->Username = getenv('SMTP_USER') ?: '';
+            $mail->Password = getenv('SMTP_PASS') ?: '';
             $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            $mail->Port = 465;
+            $mail->Port = getenv('SMTP_PORT') ? (int)getenv('SMTP_PORT') : 465;
 
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
 
-            $mail->setFrom('servicio@errautomotriz.online','ERR Automotriz');
+            $fromEmail = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
+            $fromName = getenv('SMTP_FROM_NAME') ?: 'ERR Automotriz';
+            if ($fromEmail) {
+                $mail->setFrom($fromEmail, $fromName);
+            }
             foreach($toAddresses as $t) $mail->addAddress($t);
             $mail->Subject = $subject;
             $mail->Body = $bodyText;
@@ -271,7 +281,8 @@ try {
 
     // fallback to mail()
     $boundary = md5(time());
-    $headers = "From: servicio@errautomotriz.online\r\n";
+    $fromHeader = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
+    $headers = $fromHeader ? ("From: $fromHeader\r\n") : '';
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
 

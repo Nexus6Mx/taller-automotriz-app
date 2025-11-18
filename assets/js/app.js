@@ -21,6 +21,7 @@ class APIService {
      */
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+        
         const config = {
             ...options,
             headers: {
@@ -29,24 +30,44 @@ class APIService {
             }
         };
 
+        // Si tenemos un token de autenticación, lo añadimos a la cabecera.
         if (authToken) {
             config.headers['Authorization'] = `Bearer ${authToken}`;
         }
 
         try {
             const response = await fetch(url, config);
-            const raw = await response.text(); // Leer una sola vez
-            let data;
-            try {
-                data = raw ? JSON.parse(raw) : {};
-            } catch (e) {
-                data = { message: raw };
+            const contentType = response.headers.get('content-type') || '';
+            // Read body ONCE to avoid "body stream already read" errors
+            const text = await response.text();
+
+            let data = null;
+            if (contentType.includes('application/json')) {
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    // Keep raw text for error reporting
+                    data = null;
+                }
+            } else {
+                // Try parsing anyway in case server sends JSON with wrong header
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (e) {
+                    data = null;
+                }
             }
 
             if (!response.ok) {
-                throw new Error((data && data.message) ? data.message : `Error HTTP ${response.status}`);
+                const message = (data && data.message) ? data.message : (text || `Error HTTP ${response.status}`);
+                const err = new Error(message);
+                err.status = response.status;
+                err.body = text;
+                throw err;
             }
-            return data;
+
+            // Prefer parsed JSON; fallback to raw text in an object
+            return (data !== null ? data : (text ? { message: text } : {}));
         } catch (error) {
             console.error('Error en APIService:', error);
             throw error;

@@ -14,8 +14,10 @@
             font-size: 11pt;
         }
         .container {
-            width: 800px;
-            margin: auto;
+            width: 190mm; /* match letter printable width allowing margins */
+            max-width: 100%;
+            margin: 0 auto;
+            box-sizing: border-box;
         }
         table {
             width: 100%;
@@ -93,7 +95,7 @@
     <div class="container">
         <table class="header-table">
             <tr>
-                <td class="logo"><img id="logo-img" src="assets/images/err.gif" alt="Logo" style="width: 100%;"></td>
+                <td class="logo"><img id="logo-img" src="assets/images/err.png" alt="Logo" style="width: 100%;"></td>
                 <td class="title">
                     <p>ERR Automotriz</p>
                     <p id="doc-title">ORDEN DE SERVICIO</p>

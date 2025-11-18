@@ -13,9 +13,5 @@ Si encuentras un error, abre un Issue en GitHub usando la plantilla de reporte d
 - `assets/` - Archivos JS y CSS
 - Archivos HTML para las vistas principales
 
-## Correo: notas
-En producción, el envío se realiza con PHPMailer sobre SMTP y en su ausencia, se intenta `mail()`.
-Los logs `api/logs/send_email.log` y `api/logs/send_invoice.log` ayudan a diagnosticar problemas.
-
 ## Contacto
 Para dudas técnicas, abre un Issue o contacta al responsable del repositorio.
