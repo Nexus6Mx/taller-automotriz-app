@@ -121,7 +121,7 @@
                             </div>
                             <div class="text-right text-xs text-gray-400">&nbsp;</div>
                         </div>
-                        <p class="text-xs text-gray-500 mt-3">Suma de órdenes en "Entregado pendiente de pago"</p>
+                        <p class="text-xs text-gray-500 mt-3">Estados: Entregado pendiente de pago, En Facturación, Facturado</p>
                     </div>
 
                     <!-- In-process: show main count and diagnostic count -->
@@ -499,7 +499,19 @@
                                     </tr>
                                     <tr class="bg-white">
                                         <th class="px-6 py-2"><input id="order-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar #"></th>
-                                        <th class="px-6 py-2"><select id="order-filter-status" class="w-full text-xs rounded border-gray-200 p-1"><option value="">Todos</option></select></th>
+                                        <th class="px-6 py-2 relative">
+                                            <button type="button" id="status-filter-btn" class="w-full text-xs rounded border border-gray-200 p-1 bg-white text-left flex justify-between items-center">
+                                                <span id="status-filter-label">Todos</span>
+                                                <span class="ml-1">▾</span>
+                                            </button>
+                                            <div id="status-filter-dropdown" class="hidden absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[200px] max-h-64 overflow-y-auto">
+                                                <label class="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100">
+                                                    <input type="checkbox" id="status-check-all" class="mr-2" checked>
+                                                    <span class="text-xs font-semibold text-gray-700">Todos</span>
+                                                </label>
+                                                <div id="status-checkboxes"></div>
+                                            </div>
+                                        </th>
                                         <th class="px-6 py-2"><input id="order-filter-date" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Fecha (DD/MM/YYYY)"></th>
                                         <th class="px-6 py-2"><input id="order-filter-client" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Cliente"></th>
                                         <th class="px-6 py-2"><input id="order-filter-vehicle" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Vehículo"></th>
@@ -508,6 +520,13 @@
                                     </tr>
                                 </thead>
                                 <tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                <tfoot id="orders-table-footer" class="bg-gray-100">
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-3 text-right text-sm font-bold text-gray-700">Total de Órdenes Filtradas:</td>
+                                        <td class="px-6 py-3 text-left text-lg font-bold text-green-700" id="orders-filtered-total">$0.00</td>
+                                        <td class="px-6 py-3 text-left text-xs text-gray-500" id="orders-filtered-count">0 órdenes</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                  </div>
@@ -789,7 +808,6 @@
         function renderOrdersTable(filter = '') {
             // Read per-column filters from the Historial header
             const fid = (document.getElementById('order-filter-id')?.value || '').toLowerCase().trim();
-            const fstatus = (document.getElementById('order-filter-status')?.value || '').toLowerCase().trim();
             const fdate = (document.getElementById('order-filter-date')?.value || '').toLowerCase().trim();
             const fclient = (document.getElementById('order-filter-client')?.value || '').toLowerCase().trim();
             const fvehicle = (document.getElementById('order-filter-vehicle')?.value || '').toLowerCase().trim();
@@ -806,9 +824,10 @@
 
                 if (fid && !String(o.numericId).toLowerCase().includes(fid)) return false;
 
-                if (fstatus) {
-                    const os = normalizeStatus(o.status || '').toLowerCase();
-                    if (os !== fstatus) return false;
+                // Multi-select status filter
+                if (selectedStatusFilters.length > 0) {
+                    const os = normalizeStatus(o.status || '');
+                    if (!selectedStatusFilters.includes(os)) return false;
                 }
 
                 if (fdate) {
@@ -899,6 +918,13 @@
                     </td>
                 </tr>`;
             }).join('');
+
+            // 5. Calcular y mostrar el total de órdenes filtradas
+            const filteredTotal = filteredOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+            const totalEl = document.getElementById('orders-filtered-total');
+            const countEl = document.getElementById('orders-filtered-count');
+            if (totalEl) totalEl.textContent = formatCurrency(filteredTotal);
+            if (countEl) countEl.textContent = `${filteredOrders.length} ${filteredOrders.length === 1 ? 'orden' : 'órdenes'}`;
         }
 
         function renderClientsTable(filter = '') {
@@ -1033,16 +1059,19 @@
             const orders = (localData.orders || []).map(o => ({...o, status: normalizeStatus(o.status)}));
 
             // A) KPIs
+            // Cuentas por Cobrar: estados que representan una deuda real del cliente
+            // Excluye Cotización (no es deuda) y Entregado Pagado (ya pagado)
+            const receivableStates = ['Entregado pendiente de pago', 'En Facturación', 'Facturado'];
             const accountsReceivable = orders
-                .filter(o => o.status === 'Entregado pendiente de pago')
+                .filter(o => receivableStates.includes(o.status))
                 .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
             const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
             const inProcessCount = orders.filter(o => inProcessStates.includes(o.status)).length;
 
-            // Complementary counts: >30 days for 'Entregado pendiente de pago' and Diagnostico count
+            // Complementary counts: >30 days for receivable states and Diagnostico count
             const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-            const overdue30Count = orders.filter(o => o.status === 'Entregado pendiente de pago' && o.createdAt && (new Date(o.createdAt).getTime() < thirtyDaysAgo)).length;
+            const overdue30Count = orders.filter(o => receivableStates.includes(o.status) && o.createdAt && (new Date(o.createdAt).getTime() < thirtyDaysAgo)).length;
             const diagnosticoCount = orders.filter(o => o.status === 'Diagnostico').length;
 
             // Income: last 3 months buckets using createdAt as proxy for now
@@ -1484,34 +1513,80 @@
             ui.exportBtn.addEventListener('click', exportToCSV);
         }
 
+        // Variable global para almacenar los estados seleccionados
+        let selectedStatusFilters = [];
+
         // Wire the per-column filters for Historial
         (function setupOrderFilters() {
-            const ids = ['order-filter-id','order-filter-status','order-filter-date','order-filter-client','order-filter-vehicle','order-filter-total'];
+            const ids = ['order-filter-id','order-filter-date','order-filter-client','order-filter-vehicle','order-filter-total'];
             ids.forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                // For text/number inputs, input event is fine
-                if (el.tagName !== 'SELECT') {
-                    el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
-                } else {
-                    // For selects, use change event for better cross-browser support
-                    el.addEventListener('change', () => renderOrdersTable(ui.orderSearch.value));
-                    // Some browsers also emit input; keep it as a no-op safety
-                    el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
-                }
+                el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
             });
 
-            // Populate status options from statusConfig
-            const statusSelect = document.getElementById('order-filter-status');
-            if (statusSelect) {
-                // Remove existing except 'Todos'
-                const have = new Set();
+            // Setup multi-select status filter
+            const statusBtn = document.getElementById('status-filter-btn');
+            const statusDropdown = document.getElementById('status-filter-dropdown');
+            const statusCheckboxes = document.getElementById('status-checkboxes');
+            const statusCheckAll = document.getElementById('status-check-all');
+            const statusLabel = document.getElementById('status-filter-label');
+
+            if (statusBtn && statusDropdown && statusCheckboxes) {
+                // Populate checkboxes from statusConfig
                 Object.keys(statusConfig).forEach(s => {
-                    have.add(s);
-                    const opt = document.createElement('option');
-                    opt.value = s;
-                    opt.textContent = s;
-                    statusSelect.appendChild(opt);
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer';
+                    label.innerHTML = `
+                        <input type="checkbox" class="status-checkbox mr-2" value="${s}">
+                        <span class="text-xs text-gray-700">${s}</span>
+                    `;
+                    statusCheckboxes.appendChild(label);
+                });
+
+                // Toggle dropdown
+                statusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    statusDropdown.classList.toggle('hidden');
+                });
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!statusDropdown.contains(e.target) && !statusBtn.contains(e.target)) {
+                        statusDropdown.classList.add('hidden');
+                    }
+                });
+
+                // Handle "Todos" checkbox
+                statusCheckAll.addEventListener('change', () => {
+                    const checkboxes = statusCheckboxes.querySelectorAll('.status-checkbox');
+                    if (statusCheckAll.checked) {
+                        checkboxes.forEach(cb => cb.checked = false);
+                        selectedStatusFilters = [];
+                        statusLabel.textContent = 'Todos';
+                    }
+                    renderOrdersTable(ui.orderSearch.value);
+                });
+
+                // Handle individual status checkboxes
+                statusCheckboxes.addEventListener('change', (e) => {
+                    if (e.target.classList.contains('status-checkbox')) {
+                        const checkboxes = statusCheckboxes.querySelectorAll('.status-checkbox:checked');
+                        selectedStatusFilters = Array.from(checkboxes).map(cb => cb.value);
+                        
+                        if (selectedStatusFilters.length === 0) {
+                            statusCheckAll.checked = true;
+                            statusLabel.textContent = 'Todos';
+                        } else {
+                            statusCheckAll.checked = false;
+                            if (selectedStatusFilters.length === 1) {
+                                statusLabel.textContent = selectedStatusFilters[0];
+                            } else {
+                                statusLabel.textContent = `${selectedStatusFilters.length} estados`;
+                            }
+                        }
+                        renderOrdersTable(ui.orderSearch.value);
+                    }
                 });
             }
 
@@ -1521,9 +1596,15 @@
                 ids.forEach(id => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    if (el.tagName === 'SELECT') el.selectedIndex = 0;
-                    else el.value = '';
+                    el.value = '';
                 });
+                // Clear status multi-select
+                selectedStatusFilters = [];
+                if (statusCheckAll) statusCheckAll.checked = true;
+                if (statusCheckboxes) {
+                    statusCheckboxes.querySelectorAll('.status-checkbox').forEach(cb => cb.checked = false);
+                }
+                if (statusLabel) statusLabel.textContent = 'Todos';
                 // Also clear the quick search bar
                 if (ui.orderSearch) ui.orderSearch.value = '';
                 renderOrdersTable('');
