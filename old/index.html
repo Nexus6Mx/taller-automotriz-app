@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Órdenes de Servicio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-btn.active {
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+        }
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-connected { background-color: #22c55e; }
+        .status-disconnected { background-color: #ef4444; }
+        
+        .print-format { display: none; }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .non-print {
+                display: none;
+            }
+            .print-format {
+                display: block;
+            }
+            #printable-order {
+                width: 210mm;
+                height: 297mm;
+                padding: 1cm;
+                box-sizing: border-box;
+                font-size: 10pt;
+            }
+            .border { border: 1px solid black !important; }
+            .p-2 { padding: 0.25rem !important; }
+            .mt-2 { margin-top: 0.5rem !important; }
+            .font-bold { font-weight: 700 !important; }
+            .text-right { text-align: right !important; }
+            .w-full { width: 100% !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl non-print">
+        <header class="bg-white shadow-md rounded-lg p-6 mb-8">
+            <div class="flex justify-between items-center">
+                 <div class="flex items-center gap-4">
+                    <img id="header-logo" src="" alt="Logo" class="h-16">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Gestor de Órdenes de Servicio</h1>
+                        <p class="text-gray-600 mt-1">MVP v2.7 - Crea, gestiona y analiza tus órdenes de trabajo.</p>
+                    </div>
+                </div>
+                <div id="connection-status" class="text-sm font-medium flex items-center">
+                    <span class="status-dot status-disconnected"></span>
+                    <span>Conectando...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Pestañas de Navegación -->
+        <div class="mb-6 bg-white rounded-lg shadow-sm">
+            <nav class="flex border-b border-gray-200">
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent active" data-tab="dashboard">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -ml-1 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
+                    Dashboard
+                </button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="nueva-orden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -ml-1 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                    Nueva Orden
+                </button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="historial">
+                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -ml-1 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" /></svg>
+                    Historial de Órdenes
+                </button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="catalogos">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block -ml-1 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h.01a1 1 0 100-2H10zm3 0a1 1 0 000 2h.01a1 1 0 100-2H13z" clip-rule="evenodd" /></svg>
+                    Catálogos
+                </button>
+            </nav>
+        </div>
+
+        <!-- Contenido de las Pestañas -->
+        <main>
+            <!-- Sección: Dashboard -->
+             <div id="dashboard" class="tab-content active">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Total Ingresado</h3>
+                        <p id="kpi-total-revenue" class="mt-1 text-4xl font-bold text-green-600">$0.00</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Ticket Promedio</h3>
+                        <p id="kpi-avg-ticket" class="mt-1 text-4xl font-bold text-blue-600">$0.00</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow text-center">
+                        <h3 class="text-lg font-medium text-gray-500">Total de Órdenes</h3>
+                        <p id="kpi-total-orders" class="mt-1 text-4xl font-bold text-indigo-600">0</p>
+                    </div>
+                </div>
+                 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes por Estado</h3>
+                        <canvas id="status-chart"></canvas>
+                    </div>
+                    <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Ingresos por Mes (Último año)</h3>
+                        <canvas id="revenue-chart"></canvas>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes Pendientes de Pago</h3>
+                        <div class="overflow-y-auto h-64"><table class="min-w-full"><thead class="bg-gray-50 sticky top-0"><tr><th class="p-2 text-left text-xs font-medium text-gray-500">#</th><th class="p-2 text-left text-xs font-medium text-gray-500">Cliente</th><th class="p-2 text-right text-xs font-medium text-gray-500">Total</th></tr></thead><tbody id="pending-orders-table"></tbody></table></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Últimas Órdenes Pagadas</h3>
+                        <div class="overflow-y-auto h-64"><table class="min-w-full"><thead class="bg-gray-50 sticky top-0"><tr><th class="p-2 text-left text-xs font-medium text-gray-500">#</th><th class="p-2 text-left text-xs font-medium text-gray-500">Cliente</th><th class="p-2 text-right text-xs font-medium text-gray-500">Total</th></tr></thead><tbody id="paid-orders-table"></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Nueva Orden -->
+            <div id="nueva-orden" class="tab-content">
+                <form id="order-form" class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-6">
+                         <h2 id="form-mode-title" class="text-2xl font-bold text-gray-800">Crear Nueva Orden</h2>
+                         <div>
+                            <label for="order-numeric-id" class="block text-sm font-medium text-gray-600">No. de Orden</label>
+                            <input type="number" id="order-numeric-id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-lg p-2 font-bold" required>
+                         </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="border border-gray-200 p-4 rounded-md">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-700">1. Datos del Cliente</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="client-name" class="block text-sm font-medium text-gray-600">Nombre</label>
+                                    <input type="text" id="client-name" list="clients-datalist" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                                </div>
+                                <div>
+                                    <label for="client-cel" class="block text-sm font-medium text-gray-600">Teléfono</label>
+                                    <input type="tel" id="client-cel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label for="client-address" class="block text-sm font-medium text-gray-600">Dirección</label>
+                                    <input type="text" id="client-address" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="client-rfc" class="block text-sm font-medium text-gray-600">RFC</label>
+                                    <input type="text" id="client-rfc" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="client-email" class="block text-sm font-medium text-gray-600">Email</label>
+                                    <input type="email" id="client-email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border border-gray-200 p-4 rounded-md">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-700">2. Datos del Vehículo</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="vehicle-brand" class="block text-sm font-medium text-gray-600">Marca/Modelo</label>
+                                    <input type="text" id="vehicle-brand" list="vehicles-datalist" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" required>
+                                </div>
+                                <div>
+                                    <label for="vehicle-plates" class="block text-sm font-medium text-gray-600">Placas</label>
+                                    <input type="text" id="vehicle-plates" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="vehicle-year" class="block text-sm font-medium text-gray-600">Año</label>
+                                    <input type="number" id="vehicle-year" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                                <div>
+                                    <label for="vehicle-km" class="block text-sm font-medium text-gray-600">Kilometraje</label>
+                                    <input type="number" id="vehicle-km" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 border border-gray-200 p-4 rounded-md">
+                         <h3 class="text-lg font-semibold mb-4 text-gray-700">3. Conceptos (Refacciones y Mano de Obra)</h3>
+                        <div id="items-container"></div>
+                        <button type="button" id="add-item-btn" class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                            Agregar Concepto
+                        </button>
+                    </div>
+
+                    <div class="mt-6 border border-gray-200 p-4 rounded-md">
+                        <h3 class="text-lg font-semibold mb-2 text-gray-700">4. Observaciones</h3>
+                        <textarea id="order-observations" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" rows="3" placeholder="Anotaciones sobre el servicio, solicitudes del cliente, etc."></textarea>
+                    </div>
+
+                    <div class="mt-6 flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div>
+                            <label for="order-status" class="block text-sm font-medium text-gray-700">5. Estado de la Orden</label>
+                            <select id="order-status" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option>Recibido</option>
+                                <option>Diagnostico</option>
+                                <option>En reparación</option>
+                                <option>Preparacion para entrega</option>
+                                <option>Entregado pendiente de pago</option>
+                                <option>En Facturación</option>
+                                <option>Facturado</option>
+                                <option>Entregado Pagado</option>
+                            </select>
+                        </div>
+                        <div class="w-full md:w-auto flex flex-col items-end">
+                            <div class="w-full max-w-sm space-y-2">
+                                <div class="flex justify-end items-center gap-3 pr-2">
+                                    <label for="calculate-iva" class="text-sm font-medium text-gray-700">Calcular IVA (16%)</label>
+                                    <input type="checkbox" id="calculate-iva" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                </div>
+                                <div class="text-right border-t pt-2">
+                                    <div class="flex justify-between font-medium"><span>Subtotal:</span><span id="subtotal-display">$0.00</span></div>
+                                    <div class="flex justify-between font-medium"><span>IVA:</span><span id="iva-display">$0.00</span></div>
+                                    <div class="flex justify-between font-bold text-xl text-gray-900 border-t pt-2 mt-2"><span>Total:</span><span id="total-display">$0.00</span></div>
+                                </div>
+                            </div>
+                            <div class="mt-6 flex items-center space-x-4">
+                                <button type="button" id="cancel-edit-btn" class="hidden justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
+                                <button type="submit" id="submit-btn" class="justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
+                                   <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                    Guardar Orden
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Sección: Catálogos -->
+            <div id="catalogos" class="tab-content">
+                <div class="space-y-8">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogo de Clientes</h2>
+                            <input type="text" id="client-search" placeholder="Buscar cliente..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">ID</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Nombre</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Dirección</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Teléfono</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">RFC</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Email</th></tr></thead><tbody id="clients-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                    </div>
+                     <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogo de Vehículos</h2>
+                            <input type="text" id="vehicle-search" placeholder="Buscar vehículo..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Cliente</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Marca/Modelo</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Placas</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Año</th></tr></thead><tbody id="vehicles-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow">
+                         <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogo de Insumos</h2>
+                            <input type="text" id="supply-search" placeholder="Buscar insumo..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        </div>
+                        <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Descripción</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Precio Unitario</th></tr></thead><tbody id="supplies-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Historial -->
+            <div id="historial" class="tab-content">
+                 <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                        <h2 class="text-xl font-bold">Historial de Órdenes</h2>
+                         <input type="text" id="order-search" placeholder="Buscar por cliente, vehículo, placas..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        <button id="export-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Exportar a CSV</button>
+                    </div>
+                    <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-50"><tr><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">#</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Estado</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Fecha</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Cliente</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Vehículo</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Total</th><th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Acciones</th></tr></thead><tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody></table></div>
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Plantilla de Impresión -->
+    <div class="print-format">
+        <div id="printable-order" class="p-4" style="width: 210mm; height: 297mm; margin: auto; display: flex; flex-direction: column; box-sizing: border-box;">
+            <table class="w-full border-collapse">
+                <tr>
+                    <td class="p-2" style="width: 25%;"><img id="print-logo" src="" alt="logo" style="max-width: 100%; height: auto;"></td>
+                    <td class="p-2 text-center" style="width: 50%;">
+                        <h1 class="font-bold text-2xl">ERR Automotriz</h1>
+                        <h2 class="font-bold text-xl">ORDEN DE SERVICIO</h2>
+                    </td>
+                    <td class="p-2 text-right font-bold text-lg border border-black align-top" style="width: 25%;">#<span id="print-order-id"></span></td>
+                </tr>
+            </table>
+             <table class="w-full border-collapse mt-2">
+                <tr>
+                    <td class="p-2 border border-black"><span class="font-bold">FECHA ENTRADA:</span> <span id="print-entry-date"></span></td>
+                    <td class="p-2 border border-black"><span class="font-bold">HORA ENTRADA:</span> <span id="print-entry-time"></span></td>
+                    <td class="p-2 border border-black"><span class="font-bold">FECHA SALIDA:</span> <span id="print-exit-date"></span></td>
+                </tr>
+                 <tr>
+                    <td class="p-2 border border-black" colspan="2"><span class="font-bold">CLIENTE:</span> <span id="print-client-name"></span></td>
+                    <td class="p-2 border border-black"><span class="font-bold">CEL:</span> <span id="print-client-cel"></span></td>
+                </tr>
+                <tr><td class="p-2 border border-black" colspan="3"><span class="font-bold">DIRECCIÓN:</span> <span id="print-client-address"></span></td></tr>
+                <tr>
+                     <td class="p-2 border border-black" colspan="2"><span class="font-bold">R.F.C:</span> <span id="print-client-rfc"></span></td>
+                     <td class="p-2 border border-black"><span class="font-bold">EMAIL:</span> <span id="print-client-email"></span></td>
+                </tr>
+                <tr>
+                    <td class="p-2 border border-black"><span class="font-bold">MARCA/MODELO:</span> <span id="print-vehicle-brand"></span></td>
+                    <td class="p-2 border border-black"><span class="font-bold">PLACAS:</span> <span id="print-vehicle-plates"></span></td>
+                    <td class="p-2 border border-black"><span class="font-bold">KM:</span> <span id="print-vehicle-km"></span> <span class="font-bold">AÑO:</span> <span id="print-vehicle-year"></span></td>
+                </tr>
+            </table>
+            
+            <div class="flex-grow mt-2" style="display: flex; flex-direction: column;">
+                <table class="w-full border-collapse">
+                    <thead><tr><th class="p-2 border border-black text-left w-1/6">CANT.</th><th class="p-2 border border-black text-left w-4/6">DESCRIPCIÓN</th><th class="p-2 border border-black text-right w-1/6">IMPORTE</th></tr></thead>
+                    <tbody id="print-items-body"></tbody>
+                </table>
+                <div class="mt-auto">
+                    <div class="mt-2 p-2 border border-black">
+                        <p class="font-bold">Observaciones:</p>
+                        <p id="print-observations" class="whitespace-pre-wrap"></p>
+                    </div>
+                    <table class="w-full border-collapse mt-2">
+                         <tfoot>
+                            <tr>
+                                <td id="print-iva-notice" class="p-2 align-bottom font-bold w-4/6" rowspan="3"></td>
+                                <td class="p-2 border border-black text-right font-bold w-1/6">SUBTOTAL</td>
+                                <td class="p-2 border border-black text-right w-1/6" id="print-subtotal"></td>
+                            </tr>
+                             <tr id="print-iva-row"><td class="p-2 border border-black text-right font-bold">IVA</td><td class="p-2 border border-black text-right" id="print-iva"></td></tr>
+                             <tr><td class="p-2 border border-black text-right font-bold">TOTAL</td><td class="p-2 border border-black text-right font-bold" id="print-total"></td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <datalist id="clients-datalist"></datalist>
+    <datalist id="vehicles-datalist"></datalist>
+    <datalist id="supplies-datalist"></datalist>
+
+    <script type="module">
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, setDoc, doc, Timestamp, query, orderBy, deleteDoc, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBcwD2vzPRS174uH91pPkrUdd8j9Kj23wY",
+            authDomain: "gestor-de-ordenes-1ba71.firebaseapp.com",
+            projectId: "gestor-de-ordenes-1ba71",
+            storageBucket: "gestor-de-ordenes-1ba71.appspot.com",
+            messagingSenderId: "286628679845",
+            appId: "1:286628679845:web:5f6b7ece092b298b1c3d4c"
+        };
+        
+        const appId = firebaseConfig.projectId;
+        
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        const LOGO_URL = "https://errautomotriz.com/assets/images/err.gif";
+        
+        let localData = { orders: [], clients: [], supplies: [], vehicles: [] };
+        let currentEditId = null;
+        let userId = null;
+        let chartStatus = null;
+        let chartRevenue = null;
+        
+        const ui = {
+            tabs: document.querySelectorAll('.tab-btn'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            orderForm: document.getElementById('order-form'),
+            itemsContainer: document.getElementById('items-container'),
+            addItemBtn: document.getElementById('add-item-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            cancelEditBtn: document.getElementById('cancel-edit-btn'),
+            formModeTitle: document.getElementById('form-mode-title'),
+            submitBtn: document.getElementById('submit-btn'),
+            ivaCheckbox: document.getElementById('calculate-iva'),
+            connectionStatus: document.getElementById('connection-status'),
+            clientNameInput: document.getElementById('client-name'),
+            vehicleBrandInput: document.getElementById('vehicle-brand'),
+            clientSearch: document.getElementById('client-search'),
+            vehicleSearch: document.getElementById('vehicle-search'),
+            supplySearch: document.getElementById('supply-search'),
+            orderSearch: document.getElementById('order-search'),
+            orderNumericIdInput: document.getElementById('order-numeric-id'),
+            headerLogo: document.getElementById('header-logo'),
+            ordersTable: document.getElementById('orders-table'),
+        };
+
+        const statusConfig = {
+            'Recibido': { color: 'rgba(59, 130, 246, 0.7)', class: 'bg-blue-200 text-blue-800' },
+            'Diagnostico': { color: 'rgba(139, 92, 246, 0.7)', class: 'bg-purple-200 text-purple-800' },
+            'En reparación': { color: 'rgba(234, 179, 8, 0.7)', class: 'bg-yellow-200 text-yellow-800' },
+            'Preparacion para entrega': { color: 'rgba(6, 182, 212, 0.7)', class: 'bg-cyan-200 text-cyan-800' },
+            'Entregado pendiente de pago': { color: 'rgba(239, 68, 68, 0.7)', class: 'bg-red-200 text-red-800' },
+            'En Facturación': { color: 'rgba(99, 102, 241, 0.7)', class: 'bg-indigo-200 text-indigo-800' },
+            'Facturado': { color: 'rgba(20, 184, 166, 0.7)', class: 'bg-teal-200 text-teal-800' },
+            'Entregado Pagado': { color: 'rgba(34, 197, 94, 0.7)', class: 'bg-green-200 text-green-800' }
+        };
+
+        // ---- AUTH & CONNECTION ----
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                userId = user.uid;
+                updateConnectionStatus(true);
+                initializeAppLogic(userId);
+            }
+        });
+
+        async function connect() {
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                updateConnectionStatus(false, "Error de conexión");
+            }
+        }
+
+        function updateConnectionStatus(connected, text) {
+            const dot = ui.connectionStatus.querySelector('.status-dot');
+            const statusText = ui.connectionStatus.querySelector('span:last-child');
+            if (connected) {
+                dot.className = 'status-dot status-connected';
+                statusText.textContent = text || 'Conectado a la nube';
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.classList.replace('bg-gray-400', 'bg-green-600');
+            } else {
+                dot.className = 'status-dot status-disconnected';
+                statusText.textContent = text || 'Desconectado';
+                ui.submitBtn.disabled = true;
+                ui.submitBtn.classList.replace('bg-green-600', 'bg-gray-400');
+            }
+        }
+
+        // ---- APP LOGIC & DATA PROCESSING ----
+        function initializeAppLogic(uid) {
+             const collections = ['orders', 'clients', 'supplies', 'vehicles'];
+             collections.forEach(col => {
+                const q = query(collection(db, `artifacts/${appId}/users/${uid}/${col}`), orderBy("createdAt", "desc"));
+                onSnapshot(q, snapshot => {
+                    localData[col] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    window.app.render(); // Re-render all components
+                });
+             });
+        }
+
+        function updateDashboard() {
+            const orders = localData.orders;
+            const totalOrders = orders.length;
+            const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+            const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+            document.getElementById('kpi-total-revenue').textContent = `$${totalRevenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('kpi-avg-ticket').textContent = `$${avgTicket.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            document.getElementById('kpi-total-orders').textContent = totalOrders;
+            
+            const pendingOrders = orders.filter(o => o.status !== 'Entregado Pagado');
+            const paidOrders = orders.filter(o => o.status === 'Entregado Pagado');
+
+            document.getElementById('pending-orders-table').innerHTML = pendingOrders.map(o => `<tr><td class="p-2 font-bold">${o.numericId}</td><td class="p-2">${o.client.name}</td><td class="p-2 text-right font-semibold">$${o.total.toFixed(2)}</td></tr>`).join('');
+            document.getElementById('paid-orders-table').innerHTML = paidOrders.map(o => `<tr><td class="p-2 font-bold">${o.numericId}</td><td class="p-2">${o.client.name}</td><td class="p-2 text-right font-semibold">$${o.total.toFixed(2)}</td></tr>`).join('');
+
+
+            updateStatusChart(orders);
+            updateRevenueChart(orders);
+        }
+
+        function updateStatusChart(orders) {
+            const statusCounts = orders.reduce((acc, order) => {
+                acc[order.status] = (acc[order.status] || 0) + 1;
+                return acc;
+            }, {});
+
+            const labels = Object.keys(statusCounts);
+            const data = Object.values(statusCounts);
+            const backgroundColors = labels.map(label => statusConfig[label]?.color || 'rgba(156, 163, 175, 0.7)');
+
+            if (chartStatus) chartStatus.destroy();
+            chartStatus = new Chart(document.getElementById('status-chart'), {
+                type: 'doughnut',
+                data: { labels, datasets: [{ label: 'Órdenes', data, backgroundColor: backgroundColors, borderWidth: 1 }] },
+                options: { responsive: true, maintainAspectRatio: true }
+            });
+        }
+
+        function updateRevenueChart(orders) {
+            const monthlyRevenue = {};
+            const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+            const today = new Date();
+
+            for (let i = 11; i >= 0; i--) {
+                const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+                const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+                const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+                monthlyRevenue[key] = { label: label, total: 0 };
+            }
+
+            orders.forEach(order => {
+                const orderDate = order.createdAt.toDate();
+                const key = `${orderDate.getFullYear()}-${String(orderDate.getMonth()).padStart(2, '0')}`;
+                if (monthlyRevenue[key]) monthlyRevenue[key].total += order.total;
+            });
+            
+            const labels = Object.values(monthlyRevenue).map(m => m.label);
+            const data = Object.values(monthlyRevenue).map(m => m.total);
+
+            if (chartRevenue) chartRevenue.destroy();
+            chartRevenue = new Chart(document.getElementById('revenue-chart'), {
+                type: 'bar',
+                data: { labels, datasets: [{ label: 'Ingresos Mensuales', data, backgroundColor: 'rgba(59, 130, 246, 0.7)' }] },
+                options: { scales: { y: { beginAtZero: true } }, responsive: true, maintainAspectRatio: true }
+            });
+        }
+        
+        // ---- UI & RENDERING ----
+        ui.tabs.forEach(tab => tab.addEventListener('click', e => switchToTab(e.target.dataset.tab)));
+        
+        function switchToTab(tabId) {
+            ui.tabs.forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
+            ui.tabContents.forEach(tc => tc.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function renderClientsTable(filter = '') {
+            const filteredClients = localData.clients.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
+            document.getElementById('clients-table').innerHTML = filteredClients.map(c => `
+                <tr class="hover:bg-gray-50"><td class="px-6 py-4 font-bold">${c.numericId}</td><td class="px-6 py-4">${c.name}</td><td class="px-6 py-4">${c.address || ''}</td><td class="px-6 py-4">${c.cel}</td><td class="px-6 py-4">${c.rfc || ''}</td><td class="px-6 py-4">${c.email || ''}</td></tr>
+            `).join('');
+        }
+        
+        function renderVehiclesTable(filter = '') {
+            const filteredVehicles = localData.vehicles.filter(v => `${v.brand} ${v.plates} ${v.clientName}`.toLowerCase().includes(filter.toLowerCase()));
+            document.getElementById('vehicles-table').innerHTML = filteredVehicles.map(v => `
+                 <tr class="hover:bg-gray-50"><td class="px-6 py-4">${v.clientName}</td><td class="px-6 py-4">${v.brand}</td><td class="px-6 py-4">${v.plates}</td><td class="px-6 py-4">${v.year}</td></tr>
+            `).join('');
+        }
+
+        function renderSuppliesTable(filter = '') {
+            const filteredSupplies = localData.supplies.filter(s => s.description.toLowerCase().includes(filter.toLowerCase()));
+            document.getElementById('supplies-table').innerHTML = filteredSupplies.map(s => `
+                <tr class="hover:bg-gray-50"><td class="px-6 py-4">${s.description}</td><td class="px-6 py-4">$${Number(s.price).toFixed(2)}</td></tr>
+            `).join('');
+        }
+
+        function renderOrdersTable(filter = '') {
+            const filteredOrders = localData.orders.filter(o => `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase().includes(filter.toLowerCase()));
+            
+            const statusOptions = Object.keys(statusConfig).map(s => `<option value="${s}">${s}</option>`).join('');
+
+            ui.ordersTable.innerHTML = filteredOrders.map(o => {
+                const statusInfo = statusConfig[o.status] || { class: 'bg-gray-200 text-gray-800' };
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${o.numericId}</td>
+                    <td class="px-6 py-4">
+                        <select data-order-id="${o.id}" class="status-selector text-xs p-1 rounded-full border-none ${statusInfo.class}">
+                            ${Object.keys(statusConfig).map(s => `<option value="${s}" ${o.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-6 py-4">${o.createdAt.toDate().toLocaleDateString()}</td>
+                    <td class="px-6 py-4">${o.client.name}</td>
+                    <td class="px-6 py-4">${o.vehicle.brand} ${o.vehicle.plates}</td>
+                    <td class="px-6 py-4 font-semibold">$${o.total.toFixed(2)}</td>
+                    <td class="px-6 py-4 space-x-2">
+                        <button onclick="window.app.editOrder('${o.id}')" class="text-indigo-600 hover:text-indigo-900">Editar</button>
+                        <button onclick="window.app.printOrder('${o.id}')" class="text-blue-600 hover:text-blue-900">Imprimir</button>
+                        <button onclick="window.app.deleteOrder('${o.id}', ${o.numericId})" class="text-red-600 hover:text-red-900">Eliminar</button>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        function updateClientsDatalist() {
+            document.getElementById('clients-datalist').innerHTML = localData.clients.map(c => `<option value="${c.name}"></option>`).join('');
+        }
+        function updateVehiclesDatalist(clientId) {
+            const clientVehicles = localData.vehicles.filter(v => v.clientId === clientId);
+            document.getElementById('vehicles-datalist').innerHTML = clientVehicles.map(v => `<option value="${v.brand}"></option>`).join('');
+        }
+        function updateSuppliesDatalist() {
+            document.getElementById('supplies-datalist').innerHTML = localData.supplies.map(s => `<option value="${s.description}"></option>`).join('');
+        }
+        
+        // ---- FORM LOGIC ----
+        function createItemRow(item = { qty: 1, description: '', price: '' }) {
+            const div = document.createElement('div');
+            div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row';
+            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-7"><input type="text" list="supplies-datalist" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="number" step="0.01" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
+            ui.itemsContainer.appendChild(div);
+        }
+        
+        function resetForm() {
+            ui.orderForm.reset();
+            ui.itemsContainer.innerHTML = '';
+            currentEditId = null;
+            ui.formModeTitle.textContent = 'Crear Nueva Orden';
+            ui.submitBtn.innerHTML = 'Guardar Orden';
+            ui.cancelEditBtn.classList.add('hidden');
+            ui.orderNumericIdInput.readOnly = false;
+            updateTotals();
+            createItemRow();
+            document.getElementById('vehicles-datalist').innerHTML = '';
+        }
+
+        ui.addItemBtn.addEventListener('click', () => createItemRow());
+        ui.cancelEditBtn.addEventListener('click', resetForm);
+        ui.ivaCheckbox.addEventListener('change', updateTotals);
+        
+        ui.itemsContainer.addEventListener('click', e => {
+            if (e.target.closest('.remove-item-btn')) {
+                e.target.closest('.item-row').remove();
+                updateTotals();
+            }
+        });
+
+        ui.itemsContainer.addEventListener('input', e => {
+            updateTotals();
+            if (e.target.classList.contains('item-desc')) {
+                const supply = localData.supplies.find(s => s.description.toLowerCase() === e.target.value.toLowerCase());
+                if (supply) e.target.closest('.item-row').querySelector('.item-price').value = supply.price;
+            }
+        });
+
+        ui.clientNameInput.addEventListener('input', e => {
+            const client = localData.clients.find(c => c.name === e.target.value);
+            if(client){
+                Object.entries(client).forEach(([key, value]) => {
+                    const input = document.getElementById(`client-${key.toLowerCase()}`);
+                    if(input) input.value = value;
+                });
+                updateVehiclesDatalist(client.id);
+            }
+        });
+        
+        ui.vehicleBrandInput.addEventListener('input', e => {
+            const client = localData.clients.find(c => c.name === ui.clientNameInput.value);
+            if(!client) return;
+            const vehicle = localData.vehicles.find(v => v.clientId === client.id && v.brand === e.target.value);
+             if(vehicle){
+                Object.entries(vehicle).forEach(([key, value]) => {
+                    const input = document.getElementById(`vehicle-${key.toLowerCase()}`);
+                    if(input) input.value = value;
+                });
+            }
+        });
+
+        function updateTotals() {
+            let subtotal = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                subtotal += (parseFloat(row.querySelector('.item-qty').value) || 0) * (parseFloat(row.querySelector('.item-price').value) || 0);
+            });
+            const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
+            document.getElementById('subtotal-display').textContent = `$${subtotal.toFixed(2)}`;
+            document.getElementById('iva-display').textContent = `$${iva.toFixed(2)}`;
+            document.getElementById('total-display').textContent = `$${(subtotal + iva).toFixed(2)}`;
+        }
+
+        ui.orderForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            if (!userId) return alert("Error de conexión. No se puede guardar.");
+            
+            const items = Array.from(document.querySelectorAll('.item-row')).map(row => ({
+                qty: parseFloat(row.querySelector('.item-qty').value),
+                description: row.querySelector('.item-desc').value.trim(),
+                price: parseFloat(row.querySelector('.item-price').value)
+            })).filter(item => item.description && item.qty > 0 && item.price >= 0);
+
+            if (items.length === 0) return alert('Debe agregar al menos un concepto.');
+            
+            let client = localData.clients.find(c => c.name.toLowerCase() === ui.clientNameInput.value.trim().toLowerCase());
+            if (!client) {
+                const maxClientId = localData.clients.reduce((max, c) => Math.max(max, c.numericId || 0), 0);
+                const newClientData = {
+                    name: ui.clientNameInput.value.trim(),
+                    cel: document.getElementById('client-cel').value,
+                    address: document.getElementById('client-address').value,
+                    rfc: document.getElementById('client-rfc').value,
+                    email: document.getElementById('client-email').value,
+                    numericId: maxClientId + 1,
+                    createdAt: Timestamp.now()
+                };
+                const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${userId}/clients`), newClientData);
+                client = { id: docRef.id, ...newClientData };
+            }
+
+            const vehiclePlates = document.getElementById('vehicle-plates').value.trim().toUpperCase();
+            let vehicle = localData.vehicles.find(v => v.clientId === client.id && v.plates === vehiclePlates);
+             if (!vehicle && vehiclePlates) {
+                const newVehicleData = {
+                    clientId: client.id,
+                    clientName: client.name,
+                    brand: ui.vehicleBrandInput.value,
+                    plates: vehiclePlates,
+                    year: document.getElementById('vehicle-year').value,
+                    km: document.getElementById('vehicle-km').value,
+                    createdAt: Timestamp.now()
+                };
+                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/vehicles`), newVehicleData);
+            }
+
+            for (const item of items) {
+                if (item.description && !localData.supplies.some(s => s.description.toLowerCase() === item.description.toLowerCase())) {
+                    await addDoc(collection(db, `artifacts/${appId}/users/${userId}/supplies`), { description: item.description, price: item.price, createdAt: Timestamp.now() });
+                }
+            }
+
+            const subtotal = items.reduce((acc, item) => acc + (item.qty * item.price), 0);
+            const orderData = {
+                client: { name: client.name, cel: document.getElementById('client-cel').value, address: document.getElementById('client-address').value, rfc: document.getElementById('client-rfc').value, email: document.getElementById('client-email').value },
+                vehicle: { brand: ui.vehicleBrandInput.value, plates: vehiclePlates, year: document.getElementById('vehicle-year').value, km: document.getElementById('vehicle-km').value },
+                items, subtotal, iva: ui.ivaCheckbox.checked ? subtotal * 0.16 : 0, total: subtotal + (ui.ivaCheckbox.checked ? subtotal * 0.16 : 0), ivaApplied: ui.ivaCheckbox.checked,
+                observations: document.getElementById('order-observations').value,
+                status: document.getElementById('order-status').value,
+            };
+
+            if (currentEditId) {
+                orderData.numericId = parseInt(ui.orderNumericIdInput.value, 10);
+                await setDoc(doc(db, `artifacts/${appId}/users/${userId}/orders`, currentEditId), orderData, { merge: true });
+                alert(`Orden actualizada con éxito.`);
+            } else {
+                const manualNumericId = parseInt(ui.orderNumericIdInput.value, 10);
+                if (localData.orders.some(o => o.numericId === manualNumericId)) {
+                    return alert('Error: El número de orden ya existe. Por favor, ingrese uno diferente.');
+                }
+                orderData.numericId = manualNumericId;
+                orderData.createdAt = Timestamp.now();
+                await addDoc(collection(db, `artifacts/${appId}/users/${userId}/orders`), orderData);
+                alert(`Orden #${orderData.numericId} guardada.`);
+            }
+            resetForm();
+        });
+        
+        // ---- GLOBAL APP FUNCTIONS ----
+        window.app = {
+             render: () => {
+                renderOrdersTable(ui.orderSearch.value);
+                renderClientsTable(ui.clientSearch.value);
+                renderVehiclesTable(ui.vehicleSearch.value);
+                renderSuppliesTable(ui.supplySearch.value);
+                updateDashboard();
+                updateClientsDatalist();
+                updateSuppliesDatalist();
+            },
+            editOrder: id => {
+                const order = localData.orders.find(o => o.id === id);
+                if (!order) return;
+                currentEditId = id;
+                ui.orderNumericIdInput.value = order.numericId;
+                ui.orderNumericIdInput.readOnly = true;
+                Object.keys(order.client).forEach(key => { if(document.getElementById(`client-${key}`)) document.getElementById(`client-${key}`).value = order.client[key] });
+                Object.keys(order.vehicle).forEach(key => { if(document.getElementById(`vehicle-${key}`)) document.getElementById(`vehicle-${key}`).value = order.vehicle[key] });
+                ui.itemsContainer.innerHTML = '';
+                order.items.forEach(item => createItemRow(item));
+                document.getElementById('order-observations').value = order.observations;
+                document.getElementById('order-status').value = order.status;
+                ui.ivaCheckbox.checked = order.ivaApplied;
+                updateTotals();
+                ui.formModeTitle.textContent = `Editando Orden #${order.numericId}`;
+                ui.submitBtn.innerHTML = `Actualizar Orden`;
+                ui.cancelEditBtn.classList.remove('hidden');
+                switchToTab('nueva-orden');
+            },
+            printOrder: id => {
+                const order = localData.orders.find(o => o.id === id);
+                if (!order) return;
+                
+                document.title = `Orden_ERR_${order.numericId}`;
+                
+                document.getElementById('print-logo').src = LOGO_URL;
+                document.getElementById('print-order-id').textContent = order.numericId;
+                const entryDate = order.createdAt.toDate();
+                Object.entries({ 'entry-date': entryDate.toLocaleDateString(), 'entry-time': entryDate.toLocaleTimeString(), 'exit-date': new Date().toLocaleDateString() }).forEach(([k,v])=> document.getElementById(`print-${k}`).textContent = v);
+                Object.keys(order.client).forEach(key => { if(document.getElementById(`print-client-${key}`)) document.getElementById(`print-client-${key}`).textContent = order.client[key] });
+                Object.keys(order.vehicle).forEach(key => { if(document.getElementById(`print-vehicle-${key}`)) document.getElementById(`print-vehicle-${key}`).textContent = order.vehicle[key] });
+                document.getElementById('print-items-body').innerHTML = order.items.map(item => `<tr><td class="p-2 border">${item.qty}</td><td class="p-2 border">${item.description}</td><td class="p-2 border text-right">$${(item.qty * item.price).toFixed(2)}</td></tr>`).join('');
+                document.getElementById('print-observations').textContent = order.observations;
+                document.getElementById('print-subtotal').textContent = `$${order.subtotal.toFixed(2)}`;
+                document.getElementById('print-total').textContent = `$${order.total.toFixed(2)}`;
+                document.getElementById('print-iva-row').style.display = order.ivaApplied ? '' : 'none';
+                if(order.ivaApplied) document.getElementById('print-iva').textContent = `$${order.iva.toFixed(2)}`;
+                document.getElementById('print-iva-notice').textContent = `LOS PRECIOS ${order.ivaApplied ? 'INCLUYEN' : 'NO INCLUYEN'} IVA`;
+                
+                setTimeout(() => {
+                    window.print();
+                    document.title = 'Gestor de Órdenes de Servicio';
+                }, 100);
+            },
+            deleteOrder: async (id, numericId) => {
+                if(confirm(`¿Estás seguro de que quieres eliminar la orden de servicio #${numericId}? Esta acción no se puede deshacer.`)){
+                    await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/orders`, id));
+                    alert(`Orden #${numericId} eliminada.`);
+                }
+            }
+        };
+
+        // ---- EVENT LISTENERS ----
+        ui.clientSearch.addEventListener('input', e => renderClientsTable(e.target.value));
+        ui.vehicleSearch.addEventListener('input', e => renderVehiclesTable(e.target.value));
+        ui.supplySearch.addEventListener('input', e => renderSuppliesTable(e.target.value));
+        ui.orderSearch.addEventListener('input', e => renderOrdersTable(e.target.value));
+        
+        ui.ordersTable.addEventListener('change', async (e) => {
+            if (e.target.classList.contains('status-selector')) {
+                const orderId = e.target.dataset.orderId;
+                const newStatus = e.target.value;
+                const orderRef = doc(db, `artifacts/${appId}/users/${userId}/orders`, orderId);
+                await setDoc(orderRef, { status: newStatus }, { merge: true });
+            }
+        });
+
+        ui.exportBtn.addEventListener('click', () => {
+            if (localData.orders.length === 0) return alert('No hay órdenes para exportar.');
+            let csv = "ID,Fecha,Estado,Cliente,Vehiculo,Placas,Total,Items,Observaciones\r\n";
+            localData.orders.forEach(o => {
+                csv += `${o.numericId},${o.createdAt.toDate().toLocaleDateString()},${o.status},"${o.client.name}","${o.vehicle.brand}","${o.vehicle.plates}",${o.total.toFixed(2)},"${o.items.map(i=>i.description).join('; ')}","${o.observations}"\r\n`;
+            });
+            const link = document.createElement("a");
+            link.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
+            link.download = `reporte_ordenes_${new Date().toISOString().slice(0,10)}.csv`;
+            link.click();
+        });
+
+        // ---- INITIALIZATION ----
+        ui.headerLogo.src = LOGO_URL;
+        connect();
+        resetForm();
+    </script>
+</body>
+</html>
+

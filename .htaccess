@@ -1,0 +1,16 @@
+# Ensure Authorization header reaches PHP for Bearer tokens
+RewriteEngine On
+
+# Preserve HTTPS redirect logic to parent if needed (do not force here to avoid loops)
+
+# Pass Authorization header into PHP environment
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+# CORS preflight should pass through
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [L]
+
+# Security: disable directory listings
+Options -Indexes

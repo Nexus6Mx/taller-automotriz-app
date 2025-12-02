@@ -1,0 +1,2186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Órdenes de Servicio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-btn.active { border-bottom-color: #3b82f6; color: #3b82f6; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .status-connected { background-color: #22c55e; }
+        .status-disconnected { background-color: #ef4444; }
+        /* Estilos para el autocompletado */
+        .autocomplete-results {
+            position: absolute;
+            border: 1px solid #d1d5db;
+            background-color: white;
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            width: calc(100% - 2rem); /* Ajustar al ancho del input padre */
+        }
+        .autocomplete-item {
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+        .autocomplete-item:hover, .autocomplete-item.active {
+            background-color: #f3f4f6;
+        }
+        /* Small animation for sort indicator */
+        .sort-indicator {
+            display: inline-block;
+            width: 1em;
+            text-align: center;
+            transition: transform 180ms ease, opacity 180ms ease;
+            opacity: 0.9;
+        }
+        /* Dashboard KPI responsive sizing: left 30%, center 25%, right 45% on md+ */
+        .kpi-row { display: block; }
+        .kpi-left, .kpi-center, .kpi-right { width: 100%; }
+        @media (min-width: 768px) {
+            .kpi-row { display: flex; gap: 1.5rem; align-items: stretch; }
+            .kpi-left { flex: 0 0 30%; }
+            .kpi-center { flex: 0 0 25%; }
+            .kpi-right { flex: 0 0 45%; }
+
+            /* Center KPI content for better visual balance */
+            .kpi-left, .kpi-center { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+            /* For the right card keep sparkline left but center the numeric block vertically */
+            .kpi-right > .flex.items-start { align-items: center; }
+            .kpi-right .flex-1 { display:flex; flex-direction:column; justify-content:center; }
+        }
+        /* Make box-sizing predictable so padding doesn't cause overflow */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        /* Income card specific tweaks to avoid horizontal overflow */
+        .kpi-right .w-28 { width: 64px !important; }
+        .kpi-right .grid { gap: 0.5rem; }
+        .kpi-right .grid div { padding: 0; }
+        .kpi-right .text-sm { font-size: 0.78rem; }
+        /* If card gets narrow, stack months vertically */
+        @media (max-width: 1024px) {
+            .kpi-right .grid { grid-template-columns: 1fr !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+        <header class="bg-white shadow-md rounded-lg p-6 mb-8">
+            <div class="flex justify-between items-center flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <img id="header-logo" src="assets/images/err.gif" alt="Logo" class="h-16">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">Gestor de Órdenes de Servicio</h1>
+                        <p class="text-gray-600 mt-1">MVP v3.2 - Conectado a Servidor MySQL/PHP.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div id="connection-status" class="text-sm font-medium flex items-center">
+                        <span class="status-dot status-disconnected"></span>
+                        <span>Conectando...</span>
+                    </div>
+                     <div id="user-info" class="text-sm font-medium">
+                        <span id="user-email" class="text-gray-600 font-semibold"></span>
+                        <button id="logout-btn" class="ml-4 text-red-500 hover:text-red-700 font-bold focus:outline-none">Cerrar Sesión</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Pestañas de Navegación -->
+        <div class="mb-6 bg-white rounded-lg shadow-sm">
+            <nav class="flex border-b border-gray-200">
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent active" data-tab="dashboard">Dashboard</button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="nueva-orden">Nueva Orden</button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="historial">Historial de Órdenes</button>
+                <button class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" data-tab="catalogos">Catálogos</button>
+                <button id="config-btn" class="tab-btn py-4 px-6 font-medium text-gray-500 hover:text-blue-500 focus:outline-none border-b-2 border-transparent" onclick="window.location.href='/configuracion.html'">Configuración</button>
+            </nav>
+        </div>
+
+        <!-- Contenido de las Pestañas -->
+        <main>
+            <!-- Sección: Dashboard -->
+             <div id="dashboard" class="tab-content active">
+                <!-- KPIs Gerenciales -->
+                <div class="kpi-row mb-6">
+                    <!-- Accounts receivable: denser layout with complementary stat -->
+                    <div class="kpi-left bg-white p-4 md:p-6 rounded-lg shadow">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="text-sm md:text-lg font-medium text-gray-500">Cuentas por Cobrar</h3>
+                                <p id="kpi-accounts-receivable" class="mt-2 text-3xl md:text-4xl font-bold text-red-600">$0.00</p>
+                                <p id="kpi-accounts-receivable-sub" class="mt-1 text-xs text-gray-500">Órdenes &gt;30 días: 0</p>
+                            </div>
+                            <div class="text-right text-xs text-gray-400">&nbsp;</div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">Suma de órdenes en "Entregado pendiente de pago"</p>
+                    </div>
+
+                    <!-- In-process: show main count and diagnostic count -->
+                    <div class="kpi-center bg-white p-4 md:p-6 rounded-lg shadow">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="text-sm md:text-lg font-medium text-gray-500">Órdenes en Proceso</h3>
+                                <p id="kpi-in-process" class="mt-2 text-3xl md:text-4xl font-bold text-yellow-600">0</p>
+                                <p id="kpi-in-process-sub" class="mt-1 text-xs text-gray-500">Diagnóstico: 0</p>
+                            </div>
+                            <div class="text-right text-xs text-gray-400">&nbsp;</div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">Recibido, Diagnostico, Autorizado en reparación, Preparacion para entrega</p>
+                    </div>
+
+                    <!-- Income: compact header with current month and percent change, small 3-month mini values and sparkline -->
+                    <div class="kpi-right bg-white p-4 md:p-6 rounded-lg shadow">
+                        <h3 class="text-sm md:text-lg font-medium text-gray-500">Ingresos (últimos 3 meses)</h3>
+                        <div class="flex items-start gap-4 mt-3">
+                            <!-- Left: sparkline (fixed width) -->
+                            <div class="flex-shrink-0 w-20 h-14 flex items-center justify-center">
+                                <canvas id="income-3m-chart" style="width:100% !important; height:100% !important; display:block;" ></canvas>
+                            </div>
+
+                            <!-- Right: main total + monthly breakdown -->
+                            <div class="flex-1">
+                                <div class="flex items-baseline justify-between">
+                                    <div>
+                                        <div id="kpi-income-current" class="text-2xl md:text-3xl font-extrabold text-green-600">$0.00</div>
+                                        <div id="kpi-income-change" class="text-xs text-gray-500 mt-1">% vs mes anterior: 0%</div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-600">
+                                    <div>
+                                        <div id="kpi-mi-label-2" class="text-xs text-gray-400">Mes-2</div>
+                                        <div id="kpi-mi-2" class="text-sm font-semibold text-green-600">$0.00</div>
+                                    </div>
+                                    <div>
+                                        <div id="kpi-mi-label-1" class="text-xs text-gray-400">Mes-1</div>
+                                        <div id="kpi-mi-1" class="text-sm font-semibold text-green-600">$0.00</div>
+                                    </div>
+                                    <div>
+                                        <div id="kpi-mi-label-0" class="text-xs text-gray-400">Mes</div>
+                                        <div id="kpi-mi-0" class="text-sm font-semibold text-green-600">$0.00</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">Estados: Facturado y Entregado Pagado</p>
+                    </div>
+                </div>
+
+                <!-- Carga de trabajo -->
+                <div class="bg-white p-6 rounded-lg shadow mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribución de Carga de Trabajo</h3>
+                    <div id="workload-chart-wrapper" style="width:100%; max-height:420px; height:260px; position:relative;">
+                        <canvas id="workload-chart" style="width:100% !important; height:100% !important; display:block;" ></canvas>
+                    </div>
+                </div>
+
+                <!-- Reporte de Antigüedad de Órdenes -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Órdenes con Antigüedad &gt; 15 días</h3>
+                        <span class="text-xs text-gray-500">Estados: Autorizado en reparación, Entregado pendiente de pago</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left"># Orden</th>
+                                    <th class="px-4 py-2 text-left">Cliente</th>
+                                    <th class="px-4 py-2 text-left">Estado</th>
+                                    <th class="px-4 py-2 text-left">Días</th>
+                                    <th class="px-4 py-2 text-left">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="aging-table" class="bg-white divide-y divide-gray-200"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Nuevas tablas del dashboard -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 draggable-container">
+                    <!-- Tabla de Órdenes NO Pagadas -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4 drag-handle cursor-move">Órdenes Pendientes de Pago</h3>
+                        <input type="text" id="unpaid-orders-search" placeholder="Buscar por cliente o # orden..." class="block w-full rounded-md border-gray-300 shadow-sm mb-4 text-sm">
+                        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th data-sort-key="numericId" class="px-3 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer">Orden</th>
+                                        <th data-sort-key="client.name" class="px-3 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer">Cliente</th>
+                                        <th data-sort-key="status" class="px-3 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer">Estado</th>
+                                        <th data-sort-key="total" class="px-3 py-2 text-left text-xs font-medium text-gray-500 cursor-pointer">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="unpaid-orders-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Se llenará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Órdenes Pagadas -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Órdenes Pagadas</h3>
+                        <div class="text-sm text-gray-600 mb-2">Más recientes primero</div>
+                        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Orden</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Cliente</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Estado</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="paid-orders-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Se llenará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Nueva Orden -->
+            <div id="nueva-orden" class="tab-content">
+                <form id="order-form" class="bg-white p-6 rounded-lg shadow">
+                    <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+                        <h2 id="form-mode-title" class="text-2xl font-bold text-gray-800">Crear Nueva Orden</h2>
+                        <div class="w-40">
+                            <div class="relative">
+                                <input type="number" id="order-numeric-id" placeholder=" " class="peer block w-full rounded-md border border-gray-300 p-2 text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50" readonly>
+                                <label for="order-numeric-id" class="absolute left-2 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">No. de Orden (Auto)</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Columna principal (flujo vertical) -->
+                        <div class="lg:col-span-2 space-y-6">
+                            <!-- 1. Datos del Cliente -->
+                            <section class="border border-gray-200 p-4 rounded-md bg-white">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-700">1. Datos del Cliente</h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="relative">
+                                        <input type="text" id="client-name" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" required>
+                                        <label for="client-name" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Nombre</label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="tel" id="client-cel" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="client-cel" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Teléfono</label>
+                                    </div>
+                                    <div class="relative sm:col-span-2">
+                                        <input type="text" id="client-address" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="client-address" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Dirección</label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="text" id="client-rfc" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="client-rfc" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">RFC</label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="email" id="client-email" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="client-email" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Email</label>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <!-- 2. Datos del Vehículo -->
+                            <section class="border border-gray-200 p-4 rounded-md bg-white">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-700">2. Datos del Vehículo</h3>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div class="relative">
+                                        <input type="text" id="vehicle-brand" list="vehicles-datalist" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" required>
+                                        <label for="vehicle-brand" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Marca/Modelo</label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="text" id="vehicle-plates" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="vehicle-plates" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Placas</label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="vehicle-year" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="vehicle-year" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Año</label>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="vehicle-km" placeholder=" " class="peer mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <label for="vehicle-km" class="absolute left-3 -top-2 bg-white px-1 text-xs text-gray-600 transition-all peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2 peer-focus:text-xs peer-focus:text-blue-600">Kilometraje</label>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label for="vehicle-gas-level" class="block text-sm font-medium text-gray-600 mb-1">Medidor Gas</label>
+                                        <select id="vehicle-gas-level" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                            <option value="Vacío">Vacío</option>
+                                            <option value="1/4">1/4</option>
+                                            <option value="1/2">1/2</option>
+                                            <option value="3/4">3/4</option>
+                                            <option value="Lleno">Lleno</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <!-- 3. Conceptos -->
+                            <section class="border border-gray-200 p-4 rounded-md bg-white">
+                                <h3 class="text-lg font-semibold mb-4 text-gray-700">3. Conceptos (Refacciones y Mano de Obra)</h3>
+                                <div class="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 mb-2">
+                                    <div class="col-span-1">Cantidad</div>
+                                    <div class="col-span-5">Descripción</div>
+                                    <div class="col-span-3">Precio Unitario</div>
+                                    <div class="col-span-2">Importe</div>
+                                    <div class="col-span-1 text-center">Borrar</div>
+                                </div>
+                                <div id="items-container"></div>
+                                <button type="button" id="add-item-btn" class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Agregar Concepto</button>
+                            </section>
+
+                            <!-- 4. Observaciones -->
+                            <section class="border border-gray-200 p-4 rounded-md bg-white">
+                                <h3 class="text-lg font-semibold mb-2 text-gray-700">4. Observaciones</h3>
+                                <textarea id="order-observations" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" rows="3" placeholder="Anotaciones sobre el servicio..."></textarea>
+                            </section>
+
+                            <!-- 5. Estado de la Orden -->
+                            <section class="border border-gray-200 p-4 rounded-md bg-white">
+                                <h3 class="text-lg font-semibold mb-2 text-gray-700">5. Estado de la Orden</h3>
+                                <select id="order-status" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 rounded-md">
+                                    <option>Cotización</option>
+                                    <option selected>Recibido</option>
+                                    <option>Diagnostico</option>
+                                    <option>Autorizado en reparación</option>
+                                    <option>Preparacion para entrega</option>
+                                    <option>Entregado pendiente de pago</option>
+                                    <option>En Facturación</option>
+                                    <option>Facturado</option>
+                                    <option>Entregado Pagado</option>
+                                </select>
+                            </section>
+                        </div>
+
+                        <!-- Aside de Totales (siempre visible) -->
+                        <aside class="lg:col-span-1">
+                            <div class="sticky top-6">
+                                <div class="w-full space-y-3 bg-white rounded-md border border-gray-200 p-4 shadow-sm">
+                                    <div class="flex justify-between items-center gap-3">
+                                        <label for="calculate-iva" class="text-sm font-medium text-gray-700">Calcular IVA (16%)</label>
+                                        <input type="checkbox" id="calculate-iva" class="h-4 w-4 rounded border-gray-300 text-blue-600">
+                                    </div>
+                                    <div class="text-right border-t pt-2">
+                                        <div class="flex justify-between font-medium"><span>Subtotal:</span><span id="subtotal-display">$0.00</span></div>
+                                        <div class="flex justify-between font-medium"><span>IVA:</span><span id="iva-display">$0.00</span></div>
+                                        <div class="flex justify-between font-bold text-lg text-gray-900 border-t pt-2 mt-2"><span>Total:</span><span id="total-display">$0.00</span></div>
+                                        <div class="border-t pt-3 mt-3 space-y-3">
+                                            <div class="flex items-center gap-2">
+                                                <label for="advance-date" class="text-sm font-medium text-gray-700 whitespace-nowrap">Fecha Anticipo:</label>
+                                                <input type="text" id="advance-date" placeholder="DD/MM/YYYY" maxlength="10" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <label for="advance-amount" class="text-sm font-medium text-gray-700 whitespace-nowrap">Anticipo:</label>
+                                                <input type="number" id="advance-amount" step="0.01" min="0" placeholder="0.00" class="w-32 rounded-md border-gray-300 shadow-sm text-sm">
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-between font-bold text-xl text-green-600 border-t pt-3 mt-3"><span>Total a Pagar:</span><span id="final-total-display">$0.00</span></div>
+                                    </div>
+                                    <div class="pt-2 flex items-center gap-3">
+                                        <button type="button" id="cancel-edit-btn" class="hidden px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">Cancelar</button>
+                                        <button type="submit" id="submit-btn" class="flex-1 justify-center items-center px-4 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">Guardar Orden</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Sección: Catálogos -->
+            <div id="catalogos" class="tab-content">
+                <div class="space-y-8">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold">Catálogos</h2>
+                            <div class="space-x-2">
+                                <button id="catalog-btn-clients" class="px-3 py-1 rounded bg-blue-600 text-white text-sm">Clientes</button>
+                                <button id="catalog-btn-vehicles" class="px-3 py-1 rounded bg-gray-100 text-sm">Vehículos</button>
+                                <button id="catalog-btn-supplies" class="px-3 py-1 rounded bg-gray-100 text-sm">Insumos</button>
+                            </div>
+                        </div>
+                        <div class="overflow-auto">
+                            <div id="catalog-clients" class="catalog-panel">
+                                <div class="mb-4"><input type="text" id="client-search" placeholder="Buscar por nombre o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm"></div>
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                            <tr>
+                                                <th data-sort-key="numeric_id" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">ID</span> <span class="sort-indicator"></span></th>
+                                                <th data-sort-key="name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Nombre</span> <span class="sort-indicator"></span></th>
+                                                <th data-sort-key="cel" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Teléfono</span> <span class="sort-indicator"></span></th>
+                                                <th data-sort-key="email" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Email</span> <span class="sort-indicator"></span></th>
+                                            </tr>
+                                        <tr class="bg-white">
+                                            <th class="px-6 py-2"><input id="client-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar ID"></th>
+                                            <th class="px-6 py-2"><input id="client-filter-name" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Nombre"></th>
+                                            <th class="px-6 py-2"><input id="client-filter-cel" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Teléfono"></th>
+                                            <th class="px-6 py-2"><input id="client-filter-email" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Email"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="clients-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
+                            <div id="catalog-vehicles" class="catalog-panel hidden">
+                                <div class="mb-4"><input type="text" id="vehicle-search" placeholder="Buscar por cliente, marca, placas o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm"></div>
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th data-sort-key="numeric_id" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">ID</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="client_name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Cliente</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="brand" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Marca/Modelo</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="plates" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Placas</span> <span class="sort-indicator"></span></th>
+                                        </tr>
+                                        <tr class="bg-white">
+                                            <th class="px-6 py-2"><input id="vehicle-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar ID"></th>
+                                            <th class="px-6 py-2"><input id="vehicle-filter-client" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Cliente"></th>
+                                            <th class="px-6 py-2"><input id="vehicle-filter-brand" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Marca"></th>
+                                            <th class="px-6 py-2"><input id="vehicle-filter-plates" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Placas"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="vehicles-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
+                            <div id="catalog-supplies" class="catalog-panel hidden">
+                                <div class="mb-4"><input type="text" id="supply-search" placeholder="Buscar por descripción o ID..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm"></div>
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th data-sort-key="numeric_id" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">ID</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="description" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Descripción</span> <span class="sort-indicator"></span></th>
+                                            <th data-sort-key="price" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer"><span class="col-label">Precio Unitario</span> <span class="sort-indicator"></span></th>
+                                        </tr>
+                                        <tr class="bg-white">
+                                            <th class="px-6 py-2"><input id="supply-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar ID"></th>
+                                            <th class="px-6 py-2"><input id="supply-filter-desc" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Descripción"></th>
+                                            <th class="px-6 py-2"><input id="supply-filter-price" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Precio"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="supplies-table" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección: Historial -->
+            <div id="historial" class="tab-content">
+                 <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                        <h2 class="text-xl font-bold">Historial de Órdenes</h2>
+                         <input type="text" id="order-search" placeholder="Buscar por cliente, vehículo, placas..." class="block w-full sm:w-1/2 rounded-md border-gray-300 shadow-sm">
+                        <button id="export-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">Exportar a CSV</button>
+                        <!-- Invoice settings moved to Configuración page -->
+                    </div>
+                    <!-- Invoice settings moved to Configuración page -->
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th data-sort-key="numericId" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">#</th>
+                                        <th data-sort-key="status" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Estado</th>
+                                        <th data-sort-key="createdAt" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Fecha</th>
+                                        <th data-sort-key="client.name" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Cliente</th>
+                                        <th data-sort-key="vehicle.brand" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Vehículo</th>
+                                        <th data-sort-key="total" class="px-6 py-3 text-left text-xs font-medium text-gray-500 cursor-pointer">Total</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500">Acciones</th>
+                                    </tr>
+                                    <tr class="bg-white">
+                                        <th class="px-6 py-2"><input id="order-filter-id" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar #"></th>
+                                        <th class="px-6 py-2"><select id="order-filter-status" class="w-full text-xs rounded border-gray-200 p-1"><option value="">Todos</option></select></th>
+                                        <th class="px-6 py-2"><input id="order-filter-date" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Fecha (DD/MM/YYYY)"></th>
+                                        <th class="px-6 py-2"><input id="order-filter-client" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Cliente"></th>
+                                        <th class="px-6 py-2"><input id="order-filter-vehicle" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Vehículo"></th>
+                                        <th class="px-6 py-2"><input id="order-filter-total" class="w-full text-xs rounded border-gray-200 p-1" placeholder="Filtrar Total"></th>
+                                        <th class="px-6 py-2"><button id="order-filters-clear" class="text-sm px-2 py-1 rounded bg-gray-100">Limpiar</button></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="orders-table" class="bg-white divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <datalist id="clients-datalist"></datalist>
+    <datalist id="vehicles-datalist"></datalist>
+    <datalist id="supplies-datalist"></datalist>
+
+    <script src="/assets/js/app.js?v=1.7"></script>
+    <script>
+        // Este script se carga después de app.js y extiende sus funcionalidades.
+        // Se asegura de que la aplicación esté completamente cargada antes de ejecutarse.
+        
+        // Variables globales y de UI
+        let localData = { orders: [], clients: [], supplies: [], vehicles: [] };
+        let currentEditId = null;
+    let chartStatus = null; // reused for workload chart
+    let chartIncome3m = null;
+        let orderSortState = { key: 'numericId', direction: 'desc' }; // Estado de ordenamiento de la tabla de órdenes
+        let unpaidOrderSortState = { key: 'createdAt', direction: 'asc' }; // Estado de ordenamiento para órdenes pendientes
+        let catalogSortState = {
+            clients: { key: null, direction: 'asc' },
+            vehicles: { key: null, direction: 'asc' },
+            supplies: { key: null, direction: 'asc' }
+        };
+
+        const ui = {
+            tabs: document.querySelectorAll('.tab-btn'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            orderForm: document.getElementById('order-form'),
+            itemsContainer: document.getElementById('items-container'),
+            addItemBtn: document.getElementById('add-item-btn'),
+            exportBtn: document.getElementById('export-btn'),
+            cancelEditBtn: document.getElementById('cancel-edit-btn'),
+            formModeTitle: document.getElementById('form-mode-title'),
+            submitBtn: document.getElementById('submit-btn'),
+            ivaCheckbox: document.getElementById('calculate-iva'),
+            connectionStatus: document.getElementById('connection-status'),
+            clientNameInput: document.getElementById('client-name'),
+            vehicleBrandInput: document.getElementById('vehicle-brand'),
+            clientSearch: document.getElementById('client-search'),
+            vehicleSearch: document.getElementById('vehicle-search'),
+            supplySearch: document.getElementById('supply-search'),
+            orderSearch: document.getElementById('order-search'),
+            orderNumericIdInput: document.getElementById('order-numeric-id'),
+            ordersTable: document.getElementById('orders-table'),
+            unpaidOrdersTable: document.getElementById('unpaid-orders-table'),
+            paidOrdersTable: document.getElementById('paid-orders-table'),
+            logoutBtn: document.getElementById('logout-btn'),
+            userEmail: document.getElementById('user-email')
+        };
+
+        const statusConfig = {
+            'Cotización': { color: 'rgba(107, 114, 128, 0.7)', class: 'bg-gray-200 text-gray-800' },
+            'Recibido': { color: 'rgba(59, 130, 246, 0.7)', class: 'bg-blue-200 text-blue-800' },
+            'Diagnostico': { color: 'rgba(139, 92, 246, 0.7)', class: 'bg-purple-200 text-purple-800' },
+            'Autorizado en reparación': { color: 'rgba(234, 179, 8, 0.7)', class: 'bg-yellow-200 text-yellow-800' },
+            'Preparacion para entrega': { color: 'rgba(6, 182, 212, 0.7)', class: 'bg-cyan-200 text-cyan-800' },
+            'Entregado pendiente de pago': { color: 'rgba(239, 68, 68, 0.7)', class: 'bg-red-200 text-red-800' },
+            'En Facturación': { color: 'rgba(99, 102, 241, 0.7)', class: 'bg-indigo-200 text-indigo-800' },
+            'Facturado': { color: 'rgba(20, 184, 166, 0.7)', class: 'bg-teal-200 text-teal-800' },
+            'Entregado Pagado': { color: 'rgba(34, 197, 94, 0.7)', class: 'bg-green-200 text-green-800' }
+        };
+
+        // Helper global para normalizar estados legados
+        function normalizeStatus(s) {
+            return s === 'En reparación' ? 'Autorizado en reparación' : s;
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('authToken')) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            ui.userEmail.textContent = localStorage.getItem('userEmail');
+            ui.logoutBtn.addEventListener('click', () => {
+                try {
+                    if (window.apiService && typeof window.apiService.logout === 'function') {
+                        return window.apiService.logout();
+                    }
+                } catch(e) { /* ignore */ }
+                // Fallback si apiService no está disponible (p.ej. error de carga)
+                try {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userEmail');
+                    localStorage.removeItem('userId');
+                    localStorage.removeItem('userRole');
+                } catch(e) { /* ignore */ }
+                window.location.href = '/login.html';
+            });
+
+            // Mostrar botón de configuración solo a admin
+            const currentUserEmail = (localStorage.getItem('userEmail') || '').toLowerCase();
+            const isAdmin = currentUserEmail === 'admin@errautomotriz.online' || (localStorage.getItem('userRole')||'').toLowerCase().startsWith('admin');
+            // Invoice settings moved to Configuración page; only show config button to admins
+            if (isAdmin) {
+                const cfgBtn = document.getElementById('config-btn');
+                if (cfgBtn) cfgBtn.style.display = '';
+            }
+
+            // Revalidar rol por si localStorage está desfasado
+            try {
+                const me = await window.apiService.request('/auth/me.php');
+                if (me && me.role && String(me.role).toLowerCase().startsWith('admin')) {
+                    localStorage.setItem('userRole', me.role);
+                    const cfgBtn = document.getElementById('config-btn');
+                    if (cfgBtn) cfgBtn.style.display = '';
+                }
+            } catch(e) { /* ignorar si falla */ }
+
+            // --- Carga inicial de datos ---
+            await loadData();
+
+            // --- Lógica de Pestañas ---
+            ui.tabs.forEach(tab => {
+                tab.addEventListener('click', e => {
+                    const tabId = e.target.dataset.tab;
+                    ui.tabs.forEach(t => t.classList.remove('active'));
+                    e.target.classList.add('active');
+                    ui.tabContents.forEach(tc => tc.classList.remove('active'));
+                    document.getElementById(tabId).classList.add('active');
+
+                    // Si se hace clic en "Nueva Orden" y no se está editando una orden, reseteamos el formulario.
+                    if (tabId === 'nueva-orden' && currentEditId === null) {
+                        resetForm();
+                    }
+                });
+            });
+            
+            // --- Lógica del formulario y tablas ---
+            setupFormListeners();
+            setupHistoryTableListeners();
+            setupActionsDropdowns();
+            setupCatalogSelector();
+            setupCatalogFilters();
+            restoreCatalogSortState();
+            setupCatalogSorting();
+            // setupUnpaidOrdersTableListeners(); // Temporalmente deshabilitado
+            resetForm();
+
+            // --- Lógica para activar pestaña desde URL hash y/o editar orden ---
+            const tabIdFromHash = window.location.hash.substring(1);
+            if (tabIdFromHash) {
+                const tabButton = document.querySelector(`.tab-btn[data-tab="${tabIdFromHash}"]`);
+                if (tabButton) tabButton.click();
+            }
+
+            const editOrderId = sessionStorage.getItem('editOrderId');
+            if (editOrderId) {
+                sessionStorage.removeItem('editOrderId'); // Limpiar para no re-abrir en cada recarga
+                // Asegurarnos que los datos esten cargados antes de intentar editar
+                if (localData.orders.length > 0) {
+                    window.app.editOrder(editOrderId);
+                } else {
+                    // Si los datos no han cargado, esperar y luego editar
+                    document.addEventListener('dataLoaded', () => window.app.editOrder(editOrderId), { once: true });
+                }
+            }
+        });
+
+        async function loadData() {
+            try {
+                updateConnectionStatus(false, 'Cargando datos...');
+                const [ordersData, clientsData, suppliesData, vehiclesData] = await Promise.all([
+                    window.apiService.getOrders(),
+                    window.apiService.getClients(),
+                    window.apiService.getSupplies(),
+                    window.apiService.getVehicles()
+                ]);
+                localData.orders = ordersData.data || [];
+                localData.clients = clientsData.data || [];
+                localData.supplies = suppliesData.data || [];
+                localData.vehicles = vehiclesData.data || [];
+                
+                updateConnectionStatus(true, 'Conectado al servidor');
+                renderAll();
+                document.dispatchEvent(new Event('dataLoaded'));
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+                updateConnectionStatus(false, 'Error de conexión');
+            }
+        }
+
+        // --- ACCIONES: Menús desplegables por fila (delegación) ---
+        function setupActionsDropdowns() {
+            // Cerrar cualquier menú al hacer click fuera
+            document.addEventListener('click', (e) => {
+                document.querySelectorAll('.actions-menu').forEach(menu => {
+                    if (!menu.classList.contains('hidden')) {
+                        // Si el click está dentro del botón padre, no cerrar
+                        const parent = menu.parentElement;
+                        if (parent && parent.contains(e.target)) return;
+                        menu.classList.add('hidden');
+                    }
+                });
+            });
+
+            // Delegación para abrir el menú al hacer click en el botón
+            document.body.addEventListener('click', (e) => {
+                const btn = e.target.closest('.actions-btn');
+                if (btn) {
+                    e.stopPropagation();
+                    const parent = btn.parentElement;
+                    const menu = parent.querySelector('.actions-menu');
+                    // Cerrar otros menús
+                    document.querySelectorAll('.actions-menu').forEach(m => { if (m !== menu) m.classList.add('hidden'); });
+                    menu.classList.toggle('hidden');
+                    return;
+                }
+
+                const actionItem = e.target.closest('.action-item');
+                if (actionItem) {
+                    e.stopPropagation();
+                    const action = actionItem.dataset.action;
+                    const menu = actionItem.closest('.actions-menu');
+                    const btn = menu.parentElement.querySelector('.actions-btn');
+                    const id = btn.dataset.id;
+                    const numeric = btn.dataset.numeric;
+                    menu.classList.add('hidden');
+
+                    // Llamar a las funciones existentes en window.app
+                    switch (action) {
+                        case 'edit':
+                            window.app.editOrder(id);
+                            break;
+                        case 'print':
+                            window.app.printOrder(id);
+                            break;
+                        case 'send':
+                            window.app.sendOrder(id);
+                            break;
+                        case 'invoice':
+                            window.app.invoiceOrder(id);
+                            break;
+                        case 'delete':
+                            window.app.deleteOrder(id, numeric);
+                            break;
+                        default:
+                            console.warn('Acción desconocida:', action);
+                    }
+                }
+            });
+        }
+
+        function updateConnectionStatus(connected, text) {
+            const dot = ui.connectionStatus.querySelector('.status-dot');
+            const statusText = ui.connectionStatus.querySelector('span:last-child');
+            if (connected) {
+                dot.className = 'status-dot status-connected';
+                statusText.textContent = text || 'Conectado';
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.classList.replace('bg-gray-400', 'bg-green-600');
+            } else {
+                dot.className = 'status-dot status-disconnected';
+                statusText.textContent = text || 'Desconectado';
+                ui.submitBtn.disabled = true;
+                ui.submitBtn.classList.replace('bg-green-600', 'bg-gray-400');
+            }
+        }
+
+        function renderAll() {
+            renderOrdersTable(ui.orderSearch.value);
+            renderClientsTable(ui.clientSearch.value);
+            renderVehiclesTable(ui.vehicleSearch.value);
+            renderSuppliesTable(ui.supplySearch.value);
+            updateDashboard();
+            updateClientsDatalist();
+            updateSuppliesDatalist();
+            renderUnpaidOrdersTable(document.getElementById('unpaid-orders-search').value);
+            renderPaidOrdersTable();
+        }
+
+        // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
+        
+        function renderOrdersTable(filter = '') {
+            // Read per-column filters from the Historial header
+            const fid = (document.getElementById('order-filter-id')?.value || '').toLowerCase().trim();
+            const fstatus = (document.getElementById('order-filter-status')?.value || '').toLowerCase().trim();
+            const fdate = (document.getElementById('order-filter-date')?.value || '').toLowerCase().trim();
+            const fclient = (document.getElementById('order-filter-client')?.value || '').toLowerCase().trim();
+            const fvehicle = (document.getElementById('order-filter-vehicle')?.value || '').toLowerCase().trim();
+            const ftotal = (document.getElementById('order-filter-total')?.value || '').toLowerCase().trim();
+            const quick = (filter || '').toLowerCase();
+
+            // 1. Filtrado combinado (quick search + per-column filters)
+            let filteredOrders = localData.orders.filter(o => {
+                // Quick free-text search (cliente, vehículo, placas, folio)
+                if (quick) {
+                    const hay = `${o.client.name} ${o.vehicle.brand} ${o.vehicle.plates} #${o.numericId}`.toLowerCase();
+                    if (!hay.includes(quick)) return false;
+                }
+
+                if (fid && !String(o.numericId).toLowerCase().includes(fid)) return false;
+
+                if (fstatus) {
+                    const os = normalizeStatus(o.status || '').toLowerCase();
+                    if (os !== fstatus) return false;
+                }
+
+                if (fdate) {
+                    // Expecting DD/MM/YYYY in the input; validateDate returns YYYY-MM-DD
+                    const parsed = validateDate(fdate);
+                    const isoDate = o.createdAt ? new Date(o.createdAt).toISOString().slice(0,10) : '';
+                    if (!parsed || !isoDate.startsWith(parsed)) return false;
+                }
+
+                if (fclient && !(o.client.name || '').toLowerCase().includes(fclient)) return false;
+
+                if (fvehicle) {
+                    const v = `${o.vehicle.brand} ${o.vehicle.plates}`.toLowerCase();
+                    if (!v.includes(fvehicle)) return false;
+                }
+
+                if (ftotal && !String(o.total).toLowerCase().includes(ftotal)) return false;
+
+                return true;
+            });
+
+            // 2. Ordenamiento
+            const { key, direction } = orderSortState;
+            const getKeyValue = (obj, key) => key.split('.').reduce((o, i) => (o ? o[i] : undefined), obj);
+
+            filteredOrders.sort((a, b) => {
+                const valA = getKeyValue(a, key);
+                const valB = getKeyValue(b, key);
+
+                if (valA === undefined || valA === null) return 1;
+                if (valB === undefined || valB === null) return -1;
+
+                if (key === 'numericId' || key === 'total') {
+                    return direction === 'asc' ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+                }
+                if (key === 'createdAt') {
+                    return direction === 'asc' ? new Date(valA) - new Date(valB) : new Date(valB) - new Date(valA);
+                }
+                
+                return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+            });
+
+            // 3. Indicadores visuales en encabezados
+            document.querySelectorAll('#historial th[data-sort-key]').forEach(th => {
+                th.classList.remove('bg-gray-200');
+                th.textContent = th.textContent.replace(/ (↑|↓)$/, '');
+                if (th.dataset.sortKey === key) {
+                    th.classList.add('bg-gray-200');
+                    th.textContent += ` ${direction === 'asc' ? '↑' : '↓'}`;
+                }
+            });
+
+            // 4. Renderizado (usa helper global normalizeStatus)
+            ui.ordersTable.innerHTML = filteredOrders.map(o => {
+                o.status = normalizeStatus(o.status);
+                const statusInfo = statusConfig[o.status] || { class: 'bg-gray-200 text-gray-800' };
+                const dateString = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A';
+                const advance = Number(o.advanceAmount || o.advance_amount || 0);
+                const netTotal = Math.max(0, Number(o.total) - advance);
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${o.numericId}</td>
+                    <td class="px-6 py-4">
+                        <select data-order-id="${o.id}" class="status-selector text-xs p-1 rounded-full border-none ${statusInfo.class}">
+                            ${Object.keys(statusConfig).map(s => `<option value="${s}" ${o.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-6 py-4">${dateString}</td>
+                    <td class="px-6 py-4">${o.client.name}</td>
+                    <td class="px-6 py-4">${o.vehicle.brand} ${o.vehicle.plates}</td>
+                    <td class="px-6 py-4">
+                        ${advance > 0 
+                            ? `<div class=\"text-lg font-bold text-gray-900\">${formatCurrency(netTotal)}</div>
+                               <div class=\"text-xs text-gray-600\">Total: ${formatCurrency(o.total)} • Anticipo: ${formatCurrency(advance)}</div>`
+                            : `<div class=\"font-semibold\">${formatCurrency(o.total)}</div>`}
+                    </td>
+                    <td class="px-6 py-4 relative">
+                        <div class="relative inline-block text-left">
+                            <button type="button" class="actions-btn inline-flex items-center px-3 py-1 border border-gray-200 rounded text-sm font-medium text-gray-700 hover:bg-gray-50" data-id="${o.id}" data-numeric="${o.numericId}">Acciones <span class="ml-2">▾</span></button>
+                            <div class="actions-menu hidden origin-top-right absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+                                <button type="button" class="action-item w-full text-left px-3 py-2 text-sm text-indigo-600 hover:bg-gray-50" data-action="edit">Editar</button>
+                                <button type="button" class="action-item w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-gray-50" data-action="print">Imprimir</button>
+                                <button type="button" class="action-item w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-gray-50" data-action="send">Enviar</button>
+                                <button type="button" class="action-item w-full text-left px-3 py-2 text-sm text-yellow-600 hover:bg-gray-50" data-action="invoice">Facturar</button>
+                                <button type="button" class="action-item w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-gray-50" data-action="delete">Eliminar</button>
+                            </div>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderClientsTable(filter = '') {
+            // Read column filters
+            const fid = (document.getElementById('client-filter-id')?.value || '').toLowerCase();
+            const fname = (document.getElementById('client-filter-name')?.value || '').toLowerCase();
+            const fcel = (document.getElementById('client-filter-cel')?.value || '').toLowerCase();
+            const femail = (document.getElementById('client-filter-email')?.value || '').toLowerCase();
+
+            const filtered = localData.clients.filter(c => {
+                if (fid && !String(c.numeric_id).toLowerCase().includes(fid)) return false;
+                if (fname && !(c.name || '').toLowerCase().includes(fname)) return false;
+                if (fcel && !((c.cel||'').toLowerCase().includes(fcel))) return false;
+                if (femail && !((c.email||'').toLowerCase().includes(femail))) return false;
+                // legacy quick filter
+                if (filter) {
+                    const f = filter.toLowerCase();
+                    if (!(`${c.name} ${c.numeric_id}`.toLowerCase().includes(f))) return false;
+                }
+                return true;
+            });
+
+            // Apply sorting if specified
+            const sortState = catalogSortState.clients;
+            if (sortState && sortState.key) {
+                filtered.sort((a,b) => {
+                    const ka = (a[sortState.key] || '').toString().toLowerCase();
+                    const kb = (b[sortState.key] || '').toString().toLowerCase();
+                    if (!isNaN(Number(ka)) && !isNaN(Number(kb))) {
+                        return sortState.direction === 'asc' ? Number(ka) - Number(kb) : Number(kb) - Number(ka);
+                    }
+                    return sortState.direction === 'asc' ? ka.localeCompare(kb) : kb.localeCompare(ka);
+                });
+            }
+
+            document.getElementById('clients-table').innerHTML = filtered.map(c => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${c.numeric_id}</td>
+                    <td class="px-6 py-4">${c.name}</td>
+                    <td class="px-6 py-4">${c.cel || ''}</td>
+                    <td class="px-6 py-4">${c.email || ''}</td>
+                </tr>`).join('');
+        }
+
+        function renderVehiclesTable(filter = '') {
+            const fid = (document.getElementById('vehicle-filter-id')?.value || '').toLowerCase();
+            const fclient = (document.getElementById('vehicle-filter-client')?.value || '').toLowerCase();
+            const fbrand = (document.getElementById('vehicle-filter-brand')?.value || '').toLowerCase();
+            const fplates = (document.getElementById('vehicle-filter-plates')?.value || '').toLowerCase();
+
+            const filtered = localData.vehicles.filter(v => {
+                if (fid && !String(v.numeric_id).toLowerCase().includes(fid)) return false;
+                if (fclient && !((v.client_name||'').toLowerCase().includes(fclient))) return false;
+                if (fbrand && !((v.brand||'').toLowerCase().includes(fbrand))) return false;
+                if (fplates && !((v.plates||'').toLowerCase().includes(fplates))) return false;
+                if (filter) {
+                    const f = filter.toLowerCase();
+                    if (!(`${v.client_name} ${v.brand} ${v.plates}`.toLowerCase().includes(f)) && !String(v.numeric_id).toLowerCase().includes(f)) return false;
+                }
+                return true;
+            });
+
+            // Apply sorting for vehicles
+            const sortStateV = catalogSortState.vehicles;
+            if (sortStateV && sortStateV.key) {
+                filtered.sort((a,b) => {
+                    const ka = (a[sortStateV.key] || '').toString().toLowerCase();
+                    const kb = (b[sortStateV.key] || '').toString().toLowerCase();
+                    if (!isNaN(Number(ka)) && !isNaN(Number(kb))) {
+                        return sortStateV.direction === 'asc' ? Number(ka) - Number(kb) : Number(kb) - Number(ka);
+                    }
+                    return sortStateV.direction === 'asc' ? ka.localeCompare(kb) : kb.localeCompare(ka);
+                });
+            }
+
+            document.getElementById('vehicles-table').innerHTML = filtered.map(v => `
+                 <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${v.numeric_id}</td>
+                    <td class="px-6 py-4">${v.client_name}</td>
+                    <td class="px-6 py-4">${v.brand}</td>
+                    <td class="px-6 py-4">${v.plates}</td>
+                 </tr>`).join('');
+        }
+
+        function renderSuppliesTable(filter = '') {
+            const fid = (document.getElementById('supply-filter-id')?.value || '').toLowerCase();
+            const fdesc = (document.getElementById('supply-filter-desc')?.value || '').toLowerCase();
+            const fprice = (document.getElementById('supply-filter-price')?.value || '').toLowerCase();
+
+            const filtered = localData.supplies.filter(s => {
+                if (fid && !String(s.numeric_id).toLowerCase().includes(fid)) return false;
+                if (fdesc && !((s.description||'').toLowerCase().includes(fdesc))) return false;
+                if (fprice && !String(s.price).toLowerCase().includes(fprice)) return false;
+                if (filter) {
+                    const f = filter.toLowerCase();
+                    if (!((s.description||'').toLowerCase().includes(f)) && !String(s.numeric_id).toLowerCase().includes(f)) return false;
+                }
+                return true;
+            });
+
+            // Apply sorting for supplies
+            const sortStateS = catalogSortState.supplies;
+            if (sortStateS && sortStateS.key) {
+                filtered.sort((a,b) => {
+                    const ka = (a[sortStateS.key] || '').toString().toLowerCase();
+                    const kb = (b[sortStateS.key] || '').toString().toLowerCase();
+                    if (!isNaN(Number(ka)) && !isNaN(Number(kb))) {
+                        return sortStateS.direction === 'asc' ? Number(ka) - Number(kb) : Number(kb) - Number(ka);
+                    }
+                    return sortStateS.direction === 'asc' ? ka.localeCompare(kb) : kb.localeCompare(ka);
+                });
+            }
+
+            document.getElementById('supplies-table').innerHTML = filtered.map(s => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 font-bold">${s.numeric_id}</td>
+                    <td class="px-6 py-4">${s.description}</td>
+                    <td class="px-6 py-4">${formatCurrency(s.price)}</td>
+                </tr>`).join('');
+        }
+
+        // --- FUNCIONES DE DASHBOARD ---
+        
+        function formatCurrency(amount) {
+            return `$${Number(amount).toLocaleString('es-MX', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            })}`;
+        }
+
+        function updateDashboard() {
+            const orders = (localData.orders || []).map(o => ({...o, status: normalizeStatus(o.status)}));
+
+            // A) KPIs
+            const accountsReceivable = orders
+                .filter(o => o.status === 'Entregado pendiente de pago')
+                .reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+            const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
+            const inProcessCount = orders.filter(o => inProcessStates.includes(o.status)).length;
+
+            // Complementary counts: >30 days for 'Entregado pendiente de pago' and Diagnostico count
+            const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+            const overdue30Count = orders.filter(o => o.status === 'Entregado pendiente de pago' && o.createdAt && (new Date(o.createdAt).getTime() < thirtyDaysAgo)).length;
+            const diagnosticoCount = orders.filter(o => o.status === 'Diagnostico').length;
+
+            // Income: last 3 months buckets using createdAt as proxy for now
+            const now = new Date();
+            const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            const buckets = [2,1,0].map(delta => {
+                const d = new Date(now.getFullYear(), now.getMonth() - delta, 1);
+                const ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+                return { ym, label: monthNames[d.getMonth()], total: 0, date: d };
+            });
+            orders
+                .filter(o => ['Facturado','Entregado Pagado'].includes(o.status))
+                .forEach(o => {
+                    if (!o.createdAt) return;
+                    const d = new Date(o.createdAt);
+                    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+                    const bucket = buckets.find(b => b.ym === key);
+                    if (bucket) bucket.total += Number(o.total||0);
+                });
+
+            // Month-over-month percent change (current vs previous)
+            const current = buckets[2].total || 0;
+            const previous = buckets[1].total || 0;
+            const percentChange = previous === 0 ? (current === 0 ? 0 : 100) : ((current - previous) / Math.abs(previous) * 100);
+
+            // Update DOM
+            const k1 = document.getElementById('kpi-accounts-receivable');
+            const k1sub = document.getElementById('kpi-accounts-receivable-sub');
+            const k2 = document.getElementById('kpi-in-process');
+            const k2sub = document.getElementById('kpi-in-process-sub');
+            if (k1) k1.textContent = formatCurrency(accountsReceivable);
+            if (k1sub) k1sub.textContent = `Órdenes >30 días: ${overdue30Count}`;
+            if (k2) k2.textContent = String(inProcessCount);
+            if (k2sub) k2sub.textContent = `Diagnóstico: ${diagnosticoCount}`;
+
+            // Update small 3-month values
+            [0,1,2].forEach(i => {
+                const lbl = document.getElementById(`kpi-mi-label-${i}`);
+                const val = document.getElementById(`kpi-mi-${i}`);
+                const b = buckets[i];
+                if (lbl) lbl.textContent = b?.label || '';
+                if (val) val.textContent = formatCurrency(b?.total || 0);
+            });
+
+            // Update income current and percent change
+            const kIncome = document.getElementById('kpi-income-current');
+            const kIncomeChange = document.getElementById('kpi-income-change');
+            if (kIncome) kIncome.textContent = formatCurrency(current);
+            if (kIncomeChange) {
+                const sign = percentChange > 0 ? '+' : (percentChange < 0 ? '' : '');
+                kIncomeChange.textContent = `% vs mes anterior: ${sign}${percentChange.toFixed(1)}%`;
+                kIncomeChange.title = `Mes anterior: ${formatCurrency(previous)} - Actual: ${formatCurrency(current)}`;
+            }
+
+            // Render/update compact sparkline-like chart for last 3 months
+            try { if (chartIncome3m) chartIncome3m.destroy(); } catch(e) {}
+            const cIncome = document.getElementById('income-3m-chart');
+            if (cIncome) {
+                chartIncome3m = new Chart(cIncome, {
+                    type: 'line',
+                    data: {
+                        labels: buckets.map(b => b.label),
+                        datasets: [{
+                            data: buckets.map(b => b.total),
+                            borderColor: 'rgba(34,197,94,0.9)',
+                            backgroundColor: 'rgba(34,197,94,0.12)',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { display: false }, y: { display: false, beginAtZero: true } },
+                        elements: { line: { borderWidth: 1.5 } },
+                        interaction: { intersect: false }
+                    }
+                });
+            }
+
+            // B) Workload bar chart
+            updateWorkloadChart(orders);
+
+            // C) Aging report
+            updateAgingReport(orders);
+        }
+
+        function updateWorkloadChart(orders) {
+            // Include all known states from statusConfig for full distribution,
+            // but exclude 'Entregado Pagado' from the workload distribution chart
+            const labels = Object.keys(statusConfig).filter(l => l !== 'Entregado Pagado');
+            const data = labels.map(s => orders.filter(o => o.status === s).length);
+            if (chartStatus) try { chartStatus.destroy(); } catch(e) {}
+            const ctx = document.getElementById('workload-chart');
+            if (!ctx) return;
+
+            // Define an intentional palette mapping for business meaning (cold -> warm -> alert)
+            const palette = {
+                'Cotización': 'rgba(148,163,184,0.9)',          // soft gray-blue
+                'Recibido': 'rgba(59,130,246,0.9)',            // blue
+                'Diagnostico': 'rgba(99,102,241,0.9)',         // indigo/purple
+                'Autorizado en reparación': 'rgba(16,185,129,0.9)', // bright green
+                'Preparacion para entrega': 'rgba(250,204,21,0.95)', // amber
+                'Entregado pendiente de pago': 'rgba(239,68,68,0.9)', // red
+                'En Facturación': 'rgba(6,182,212,0.9)',       // cyan
+                'Facturado': 'rgba(14,165,233,0.9)',           // darker cyan/blue
+                'Entregado Pagado': 'rgba(5,150,105,0.9)'      // dark green
+            };
+
+            // Create background color array based on palette, fallback to neutral
+            const bgColors = labels.map(l => palette[l] || 'rgba(156,163,175,0.85)');
+
+            // Custom plugin to draw soft shadow behind bars (subtle depth) using afterDatasetsDraw
+            const barShadowPlugin = {
+                id: 'barShadowPlugin',
+                afterDatasetsDraw(chart, args, options) {
+                    const ctx2 = chart.ctx;
+                    ctx2.save();
+                    try {
+                        chart.data.datasets.forEach((dataset, dsIndex) => {
+                            const meta = chart.getDatasetMeta(dsIndex);
+                            if (!meta || !meta.data) return;
+                            meta.data.forEach((bar) => {
+                                // Use bar properties directly to avoid internal getProps that may cause side-effects
+                                const x = bar.x;
+                                const y = bar.y;
+                                const base = bar.base;
+                                const width = bar.width || (bar.right - bar.left) || 0;
+                                const height = Math.abs(base - y);
+                                // Draw a subtle rounded shadow rect under the bar
+                                const shadowHeight = Math.max(6, Math.min(12, height * 0.12));
+                                ctx2.fillStyle = 'rgba(0,0,0,0.08)';
+                                const rx = 4; // corner radius for shadow (rounded)
+                                const sx = x - width/2;
+                                const sy = Math.min(y, base) - shadowHeight/2 + 2;
+                                // Draw rounded rect (simple) by path
+                                ctx2.beginPath();
+                                ctx2.moveTo(sx + rx, sy);
+                                ctx2.lineTo(sx + width - rx, sy);
+                                ctx2.quadraticCurveTo(sx + width, sy, sx + width, sy + rx);
+                                ctx2.lineTo(sx + width, sy + shadowHeight - rx);
+                                ctx2.quadraticCurveTo(sx + width, sy + shadowHeight, sx + width - rx, sy + shadowHeight);
+                                ctx2.lineTo(sx + rx, sy + shadowHeight);
+                                ctx2.quadraticCurveTo(sx, sy + shadowHeight, sx, sy + shadowHeight - rx);
+                                ctx2.lineTo(sx, sy + rx);
+                                ctx2.quadraticCurveTo(sx, sy, sx + rx, sy);
+                                ctx2.closePath();
+                                ctx2.fill();
+                            });
+                        });
+                    } catch (e) {
+                        // Avoid throwing to not break chart rendering
+                        console.warn('barShadowPlugin draw failed', e);
+                    }
+                    ctx2.restore();
+                }
+            };
+
+            chartStatus = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Órdenes en Proceso',
+                        data,
+                        backgroundColor: bgColors,
+                        borderRadius: 8,
+                        borderSkipped: false,
+                        // Stabilize sizing to avoid recalculations that can trigger layout thrashing
+                        maxBarThickness: 48,
+                        barPercentage: 0.85,
+                        categoryPercentage: 0.9
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    animation: { duration: 0 },
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 0,
+                                autoSkip: false,
+                                callback: function(value, index, ticks) {
+                                    // Shorten long labels if necessary
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 16 ? label.substring(0,14) + '…' : label;
+                                }
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { precision: 0 }
+                        }
+                    }
+                },
+                plugins: [barShadowPlugin]
+            });
+        }
+
+        function updateAgingReport(orders) {
+            const criticalStates = ['Autorizado en reparación','Entregado pendiente de pago'];
+            const rows = orders
+                .filter(o => criticalStates.includes(o.status))
+                .map(o => {
+                    const created = o.createdAt ? new Date(o.createdAt) : null;
+                    const days = created ? Math.floor((Date.now() - created.getTime()) / (1000*60*60*24)) : 0;
+                    return { id: o.numericId, client: o.client?.name || '', status: o.status, days, total: Number(o.total||0) };
+                })
+                .filter(r => r.days > 15)
+                .sort((a,b) => b.days - a.days);
+            const tbody = document.getElementById('aging-table');
+            if (!tbody) return;
+            tbody.innerHTML = rows.length ? rows.map(r => `
+                <tr>
+                    <td class="px-4 py-2 font-semibold">${r.id}</td>
+                    <td class="px-4 py-2">${r.client}</td>
+                    <td class="px-4 py-2">${r.status}</td>
+                    <td class="px-4 py-2">${r.days}</td>
+                    <td class="px-4 py-2">${formatCurrency(r.total)}</td>
+                </tr>
+            `).join('') : '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">No hay órdenes con más de 15 días en los estados seleccionados</td></tr>';
+        }
+
+        // --- FUNCIONES PARA TABLAS DEL DASHBOARD ---
+
+        function renderUnpaidOrdersTable(filter = '') {
+            const f = filter.toLowerCase();
+            // Filtrar órdenes NO pagadas (todos los estados excepto 'Entregado Pagado')
+            let unpaidOrders = localData.orders.map(o => ({...o, status: normalizeStatus(o.status)})).filter(order => 
+                order.status !== 'Entregado Pagado' &&
+                (`${order.client.name} #${order.numericId}`.toLowerCase().includes(f))
+            );
+
+            // Ordenamiento
+            const { key, direction } = unpaidOrderSortState;
+            const getKeyValue = (obj, key) => key.split('.').reduce((o, i) => (o ? o[i] : undefined), obj);
+
+            unpaidOrders.sort((a, b) => {
+                const valA = getKeyValue(a, key);
+                const valB = getKeyValue(b, key);
+
+                if (valA === undefined || valA === null) return 1;
+                if (valB === undefined || valB === null) return -1;
+
+                if (key === 'numericId' || key === 'total') {
+                    return direction === 'asc' ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+                }
+                if (key === 'createdAt') {
+                    return direction === 'asc' ? new Date(valA) - new Date(valB) : new Date(valB) - new Date(valA);
+                }
+                
+                return direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+            });
+
+            // Indicadores visuales en encabezados
+            document.querySelectorAll('#unpaid-orders-table th[data-sort-key]').forEach(th => {
+                th.classList.remove('bg-gray-200');
+                th.textContent = th.textContent.replace(/ (↑|↓)$/, '');
+                if (th.dataset.sortKey === key) {
+                    th.classList.add('bg-gray-200');
+                    th.textContent += ` ${direction === 'asc' ? '↑' : '↓'}`;
+                }
+            });
+
+            // Renderizar tabla
+            ui.unpaidOrdersTable.innerHTML = unpaidOrders.map(order => {
+                const statusInfo = statusConfig[order.status] || { class: 'bg-gray-200 text-gray-800' };
+                const dateString = order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-MX') : 'N/A';
+                const clientName = order.client?.name || 'N/A';
+
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 text-xs font-bold">${order.numericId}</td>
+                    <td class="px-3 py-2 text-xs">${clientName.length > 15 ? clientName.substring(0, 15) + '...' : clientName}</td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.class}">
+                            ${order.status.length > 12 ? order.status.substring(0, 12) + '...' : order.status}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-xs font-semibold">${formatCurrency(order.total)}</td>
+                </tr>`;
+            }).join('');
+
+            // Mostrar mensaje si no hay órdenes
+            if (unpaidOrders.length === 0) {
+                ui.unpaidOrdersTable.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-center text-sm text-gray-500">No hay órdenes pendientes</td></tr>';
+            }
+        }
+
+        function renderPaidOrdersTable() {
+            // Filtrar órdenes pagadas (solo 'Entregado Pagado')
+            const paidOrders = localData.orders.map(o => ({...o, status: normalizeStatus(o.status)})).filter(order => order.status === 'Entregado Pagado');
+
+            // Ordenar por fecha descendente (más nuevas primero)
+            paidOrders.sort((a, b) => {
+                if (!a.createdAt && !b.createdAt) return 0;
+                if (!a.createdAt) return 1;
+                if (!b.createdAt) return -1;
+                return new Date(b.createdAt) - new Date(a.createdAt);
+            });
+
+            // Renderizar tabla
+            ui.paidOrdersTable.innerHTML = paidOrders.slice(0, 10).map(order => {
+                const statusInfo = statusConfig[order.status] || { class: 'bg-gray-200 text-gray-800' };
+                const dateString = order.createdAt ? new Date(order.createdAt).toLocaleDateString('es-MX') : 'N/A';
+                const clientName = order.client?.name || 'N/A';
+
+                return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 text-xs font-bold">${order.numericId}</td>
+                    <td class="px-3 py-2 text-xs">${clientName.length > 15 ? clientName.substring(0, 15) + '...' : clientName}</td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.class}">
+                            ${order.status.length > 12 ? order.status.substring(0, 12) + '...' : order.status}
+                        </span>
+                    </td>
+                    <td class="px-3 py-2 text-xs font-semibold">${formatCurrency(order.total)}</td>
+                </tr>`;
+            }).join('');
+
+            // Mostrar mensaje si no hay órdenes
+            if (paidOrders.length === 0) {
+                ui.paidOrdersTable.innerHTML = '<tr><td colspan="4" class="px-3 py-4 text-center text-sm text-gray-500">No hay órdenes pagadas</td></tr>';
+            }
+        }
+
+        // --- LÓGICA DE AUTOCOMPLETADO (DATALISTS) ---
+        
+        function updateClientsDatalist() {
+            document.getElementById('clients-datalist').innerHTML = localData.clients.map(c => `<option value="${c.name}"></option>`).join('');
+        }
+
+        function updateSuppliesDatalist() {
+            document.getElementById('supplies-datalist').innerHTML = localData.supplies.map(s => `<option value="${s.description}"></option>`).join('');
+        }
+        
+        function updateVehiclesDatalist(clientName) {
+            const clientVehicles = localData.vehicles.filter(v => v.client_name === clientName);
+            document.getElementById('vehicles-datalist').innerHTML = clientVehicles.map(v => `<option value="${v.brand}" data-plates="${v.plates}"></option>`).join('');
+        }
+
+        // --- LÓGICA DEL FORMULARIO ---
+        
+        function setupFormListeners() {
+            ui.addItemBtn.addEventListener('click', () => createItemRow());
+            ui.cancelEditBtn.addEventListener('click', resetForm);
+            ui.ivaCheckbox.addEventListener('change', updateTotals);
+            
+            // Listeners para el anticipo
+            document.getElementById('advance-amount').addEventListener('input', updateTotals);
+            document.getElementById('advance-date').addEventListener('input', formatDateInput);
+            
+            ui.itemsContainer.addEventListener('click', e => {
+                if (e.target.closest('.remove-item-btn')) {
+                    e.target.closest('.item-row').remove();
+                    updateTotals();
+                }
+            });
+
+            ui.itemsContainer.addEventListener('input', e => {
+                const row = e.target.closest('.item-row');
+                if (row) {
+                    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+                    const unitPrice = parseFloat(row.querySelector('.item-unit-price').value) || 0;
+                    const totalPrice = qty * unitPrice;
+
+                    // Actualizar el campo de importe automáticamente
+                    row.querySelector('.item-price').value = totalPrice;
+
+                    // Si cambió la descripción, buscar precio del insumo
+                    if (e.target.classList.contains('item-desc')) {
+                        const supply = localData.supplies.find(s => s.description.toLowerCase() === e.target.value.toLowerCase());
+                        if (supply) {
+                            row.querySelector('.item-unit-price').value = supply.price;
+                            // Recalcular el total con el precio encontrado
+                            const newTotal = qty * supply.price;
+                            row.querySelector('.item-price').value = newTotal;
+                        }
+                    }
+                }
+                updateTotals();
+            });
+
+            ui.clientNameInput.addEventListener('input', e => {
+                const client = localData.clients.find(c => c.name === e.target.value);
+                if(client){
+                    Object.entries(client).forEach(([key, value]) => {
+                        const input = document.getElementById(`client-${key.toLowerCase()}`);
+                        if(input && key !== 'name') input.value = value;
+                    });
+                    updateVehiclesDatalist(client.name);
+                }
+            });
+
+            ui.vehicleBrandInput.addEventListener('input', e => {
+                const clientName = ui.clientNameInput.value;
+                if(!clientName) return;
+                const vehicle = localData.vehicles.find(v => v.client_name === clientName && v.brand === e.target.value);
+                if(vehicle){
+                    Object.entries(vehicle).forEach(([key, value]) => {
+                        const input = document.getElementById(`vehicle-${key.toLowerCase()}`);
+                        if(input && key !== 'brand') input.value = value;
+                    });
+                }
+            });
+
+            ui.orderForm.addEventListener('submit', handleFormSubmit);
+            
+            ui.clientSearch.addEventListener('input', e => renderClientsTable(e.target.value));
+            ui.vehicleSearch.addEventListener('input', e => renderVehiclesTable(e.target.value));
+            ui.supplySearch.addEventListener('input', e => renderSuppliesTable(e.target.value));
+            ui.orderSearch.addEventListener('input', e => renderOrdersTable(e.target.value));
+            document.getElementById('unpaid-orders-search').addEventListener('input', e => renderUnpaidOrdersTable(e.target.value));
+            document.getElementById('unpaid-orders-search').addEventListener('input', e => renderUnpaidOrdersTable(e.target.value));
+
+            ui.ordersTable.addEventListener('change', async (e) => {
+                if (e.target.classList.contains('status-selector')) {
+                    const orderId = e.target.dataset.orderId;
+                    const newStatus = e.target.value;
+                    try {
+                        await window.apiService.updateOrder(orderId, { status: newStatus });
+                        await loadData(); // Recargar para reflejar el cambio de color
+                    } catch (error) {
+                        alert('Error al actualizar estado: ' + error.message);
+                        await loadData(); 
+                    }
+                }
+            });
+            
+            ui.exportBtn.addEventListener('click', exportToCSV);
+        }
+
+        // Wire the per-column filters for Historial
+        (function setupOrderFilters() {
+            const ids = ['order-filter-id','order-filter-status','order-filter-date','order-filter-client','order-filter-vehicle','order-filter-total'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                // For text/number inputs, input event is fine
+                if (el.tagName !== 'SELECT') {
+                    el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
+                } else {
+                    // For selects, use change event for better cross-browser support
+                    el.addEventListener('change', () => renderOrdersTable(ui.orderSearch.value));
+                    // Some browsers also emit input; keep it as a no-op safety
+                    el.addEventListener('input', () => renderOrdersTable(ui.orderSearch.value));
+                }
+            });
+
+            // Populate status options from statusConfig
+            const statusSelect = document.getElementById('order-filter-status');
+            if (statusSelect) {
+                // Remove existing except 'Todos'
+                const have = new Set();
+                Object.keys(statusConfig).forEach(s => {
+                    have.add(s);
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = s;
+                    statusSelect.appendChild(opt);
+                });
+            }
+
+            const clearBtn = document.getElementById('order-filters-clear');
+            if (clearBtn) clearBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (el.tagName === 'SELECT') el.selectedIndex = 0;
+                    else el.value = '';
+                });
+                // Also clear the quick search bar
+                if (ui.orderSearch) ui.orderSearch.value = '';
+                renderOrdersTable('');
+            });
+        })();
+
+        function setupHistoryTableListeners() {
+            document.querySelectorAll('#historial th[data-sort-key]').forEach(header => {
+                header.addEventListener('click', () => {
+                    const newKey = header.dataset.sortKey;
+                    if (orderSortState.key === newKey) {
+                        orderSortState.direction = orderSortState.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        orderSortState.key = newKey;
+                        orderSortState.direction = 'desc'; // Por defecto, ordenar descendentemente en nueva columna
+                    }
+                    renderOrdersTable(ui.orderSearch.value);
+                });
+            });
+        }
+
+        function setupCatalogSelector() {
+            const btnClients = document.getElementById('catalog-btn-clients');
+            const btnVehicles = document.getElementById('catalog-btn-vehicles');
+            const btnSupplies = document.getElementById('catalog-btn-supplies');
+
+            const panelClients = document.getElementById('catalog-clients');
+            const panelVehicles = document.getElementById('catalog-vehicles');
+            const panelSupplies = document.getElementById('catalog-supplies');
+
+            function showPanel(name) {
+                panelClients.classList.toggle('hidden', name !== 'clients');
+                panelVehicles.classList.toggle('hidden', name !== 'vehicles');
+                panelSupplies.classList.toggle('hidden', name !== 'supplies');
+
+                btnClients.classList.toggle('bg-blue-600', name === 'clients');
+                btnClients.classList.toggle('bg-gray-100', name !== 'clients');
+                btnVehicles.classList.toggle('bg-blue-600', name === 'vehicles');
+                btnVehicles.classList.toggle('bg-gray-100', name !== 'vehicles');
+                btnSupplies.classList.toggle('bg-blue-600', name === 'supplies');
+                btnSupplies.classList.toggle('bg-gray-100', name !== 'supplies');
+            }
+
+            btnClients.addEventListener('click', () => showPanel('clients'));
+            btnVehicles.addEventListener('click', () => showPanel('vehicles'));
+            btnSupplies.addEventListener('click', () => showPanel('supplies'));
+
+            // Show clients by default
+            showPanel('clients');
+        }
+
+        function setupCatalogSorting() {
+            // Attach handlers to all th elements with data-sort-key within catalog panels
+            document.querySelectorAll('#catalog-clients th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => handleCatalogSort('clients', th.dataset.sortKey, th));
+            });
+            document.querySelectorAll('#catalog-vehicles th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => handleCatalogSort('vehicles', th.dataset.sortKey, th));
+            });
+            document.querySelectorAll('#catalog-supplies th[data-sort-key]').forEach(th => {
+                th.addEventListener('click', () => handleCatalogSort('supplies', th.dataset.sortKey, th));
+            });
+        }
+
+        function handleCatalogSort(catalog, key, thElement) {
+            const state = catalogSortState[catalog];
+            if (state.key === key) {
+                state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.key = key;
+                state.direction = 'asc';
+            }
+
+            // Update visual indicators
+            const panel = document.getElementById(`catalog-${catalog}`);
+            panel.querySelectorAll('.sort-indicator').forEach(si => si.textContent = '');
+            const indicator = thElement.querySelector('.sort-indicator');
+            if (indicator) indicator.textContent = state.direction === 'asc' ? '↑' : '↓';
+
+            // Persist state
+            try { localStorage.setItem('catalogSortState', JSON.stringify(catalogSortState)); } catch(e) {}
+
+            // Re-render the corresponding table
+            if (catalog === 'clients') renderClientsTable();
+            if (catalog === 'vehicles') renderVehiclesTable();
+            if (catalog === 'supplies') renderSuppliesTable();
+        }
+
+        function restoreCatalogSortState() {
+            try {
+                const raw = localStorage.getItem('catalogSortState');
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (parsed) catalogSortState = Object.assign(catalogSortState, parsed);
+                // Update indicators
+                ['clients','vehicles','supplies'].forEach(cat => {
+                    const state = catalogSortState[cat];
+                    if (!state || !state.key) return;
+                    const panel = document.getElementById(`catalog-${cat}`);
+                    if (!panel) return;
+                    panel.querySelectorAll('.sort-indicator').forEach(si => si.textContent = '');
+                    const th = panel.querySelector(`th[data-sort-key="${state.key}"]`);
+                    if (th) {
+                        const indicator = th.querySelector('.sort-indicator');
+                        if (indicator) indicator.textContent = state.direction === 'asc' ? '↑' : '↓';
+                    }
+                });
+            } catch (e) { /* ignore restore errors */ }
+        }
+
+        function setupCatalogFilters() {
+            // Clients
+            ['client-filter-id','client-filter-name','client-filter-cel','client-filter-email','client-search'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderClientsTable(ui.orderSearch.value));
+            });
+
+            // Vehicles
+            ['vehicle-filter-id','vehicle-filter-client','vehicle-filter-brand','vehicle-filter-plates','vehicle-search'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderVehiclesTable());
+            });
+
+            // Supplies
+            ['supply-filter-id','supply-filter-desc','supply-filter-price','supply-search'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => renderSuppliesTable());
+            });
+        }
+
+        function createItemRow(item = { qty: 1, description: '', unitPrice: '', price: '' }) {
+            const div = document.createElement('div');
+            div.className = 'grid grid-cols-12 gap-2 items-center mb-2 item-row relative';
+
+            div.innerHTML = `<div class="col-span-1"><input type="number" value="${item.qty}" min="1" class="item-qty mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-5"><input type="text" value="${item.description}" class="item-desc mt-1 w-full rounded-md border-gray-300 shadow-sm" required></div><div class="col-span-3"><input type="text" inputmode="decimal" value="${item.unitPrice}" class="item-unit-price mt-1 w-full rounded-md border-gray-300 shadow-sm" required placeholder="0.00"></div><div class="col-span-2"><input type="text" inputmode="decimal" value="${item.price}" class="item-price mt-1 w-full rounded-md border-gray-300 shadow-sm bg-gray-100" required readonly></div><div class="col-span-1"><button type="button" class="remove-item-btn mt-1 w-full p-2 rounded-md text-white bg-red-600 hover:bg-red-700">X</button></div>`;
+            ui.itemsContainer.appendChild(div);
+
+            // Aplicar formato visual a los campos numéricos después de crearlos
+            const unitPriceInput = div.querySelector('.item-unit-price');
+            const priceInput = div.querySelector('.item-price');
+
+            // Función para formatear números como moneda mexicana
+            function formatNumberAsCurrency(input, value) {
+                if (value && value > 0) {
+                    input.value = Number(value).toLocaleString('es-MX', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                }
+            }
+
+            if (unitPriceInput && item.unitPrice) {
+                formatNumberAsCurrency(unitPriceInput, item.unitPrice);
+                unitPriceInput.addEventListener('focus', function() {
+                    // Al hacer focus, mostrar solo el número sin formato
+                    const numValue = parseFloat(this.value.replace(/[^ -￿]/g, '')) || 0;
+                    this.value = numValue;
+                });
+                unitPriceInput.addEventListener('blur', function() {
+                    const value = parseFloat(this.value) || 0;
+                    formatNumberAsCurrency(this, value);
+                });
+            }
+
+            if (priceInput && item.price) {
+                formatNumberAsCurrency(priceInput, item.price);
+                priceInput.addEventListener('focus', function() {
+                    // Al hacer focus, mostrar solo el número sin formato
+                    const numValue = parseFloat(this.value.replace(/[^ -￿]/g, '')) || 0;
+                    this.value = numValue;
+                });
+                priceInput.addEventListener('blur', function() {
+                    const value = parseFloat(this.value) || 0;
+                    formatNumberAsCurrency(this, value);
+                });
+            }
+        }
+
+        function resetForm() {
+            ui.orderForm.reset();
+            ui.itemsContainer.innerHTML = '';
+            currentEditId = null;
+            ui.formModeTitle.textContent = 'Crear Nueva Orden';
+            ui.submitBtn.textContent = 'Guardar Orden';
+            ui.submitBtn.disabled = false;
+            ui.cancelEditBtn.classList.add('hidden');
+            ui.orderNumericIdInput.readOnly = true; // Siempre readonly en modo creación
+            ui.orderNumericIdInput.classList.add('bg-gray-50');
+            ui.orderNumericIdInput.classList.remove('bg-white');
+
+            // --- LÓGICA PARA FOLIO CONSECUTIVO (solo para vista previa) ---
+            if (localData.orders && localData.orders.length > 0) {
+                const maxId = localData.orders.reduce((max, o) => Math.max(max, Number(o.numericId)), 0);
+                ui.orderNumericIdInput.value = maxId + 1;
+            } else {
+                ui.orderNumericIdInput.value = 10000; // Valor inicial por defecto
+            }
+            // El backend asignará el número real, este es solo referencial
+
+            updateTotals();
+            createItemRow();
+            document.getElementById('vehicles-datalist').innerHTML = '';
+        }
+
+        function updateTotals() {
+            let subtotal = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                const priceValue = row.querySelector('.item-price').value.replace(/[^0-9.-]+/g,"");
+                subtotal += parseFloat(priceValue) || 0;
+            });
+            const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
+            const total = subtotal + iva;
+            const advanceAmount = parseFloat(document.getElementById('advance-amount').value) || 0;
+            const finalTotal = total - advanceAmount;
+
+            document.getElementById('subtotal-display').textContent = formatCurrency(subtotal);
+            document.getElementById('iva-display').textContent = formatCurrency(iva);
+            document.getElementById('total-display').textContent = formatCurrency(total);
+            document.getElementById('final-total-display').textContent = formatCurrency(finalTotal);
+        }
+
+        function formatDateInput(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Eliminar caracteres no numéricos
+            if (value.length >= 2) {
+                value = value.slice(0, 2) + '/' + value.slice(2);
+            }
+            if (value.length >= 5) {
+                value = value.slice(0, 5) + '/' + value.slice(5, 9);
+            }
+            e.target.value = value;
+        }
+
+        function validateDate(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('/');
+            if (parts.length !== 3) return null;
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) return null;
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            // Prevenir doble submit
+            if (ui.submitBtn.disabled) {
+                return;
+            }
+            ui.submitBtn.disabled = true;
+            const originalText = ui.submitBtn.textContent;
+            ui.submitBtn.textContent = 'Guardando...';
+            
+            const items = Array.from(document.querySelectorAll('.item-row')).map(row => ({
+                qty: parseFloat(row.querySelector('.item-qty').value),
+                description: row.querySelector('.item-desc').value.trim(),
+                price: parseFloat(row.querySelector('.item-price').value.replace(/[^0-9.-]+/g,""))
+            })).filter(item => item.description && item.qty > 0 && item.price >= 0);
+
+            if (items.length === 0) {
+                alert('Debe agregar al menos un concepto.');
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.textContent = originalText;
+                return;
+            }
+
+            const subtotal = items.reduce((acc, item) => acc + item.price, 0);
+            const iva = ui.ivaCheckbox.checked ? subtotal * 0.16 : 0;
+            const total = subtotal + iva;
+
+            const orderData = {
+                // No enviamos numeric_id en creación, el backend lo asigna automáticamente
+                // Solo se envía en modo edición cuando currentEditId existe
+                ...(currentEditId ? { numeric_id: parseInt(ui.orderNumericIdInput.value, 10) } : {}),
+                client: {
+                    name: ui.clientNameInput.value.trim(),
+                    cel: document.getElementById('client-cel').value,
+                    address: document.getElementById('client-address').value,
+                    rfc: document.getElementById('client-rfc').value,
+                    email: document.getElementById('client-email').value
+                },
+                vehicle: {
+                    brand: ui.vehicleBrandInput.value,
+                    plates: document.getElementById('vehicle-plates').value,
+                    year: document.getElementById('vehicle-year').value,
+                    km: document.getElementById('vehicle-km').value,
+                    gasLevel: document.getElementById('vehicle-gas-level').value
+                },
+                items: items,
+                subtotal: subtotal,
+                iva: iva,
+                total: total,
+                ivaApplied: Number(ui.ivaCheckbox.checked),
+                advance_amount: document.getElementById('advance-amount').value ? parseFloat(document.getElementById('advance-amount').value) : null,
+                advance_date: validateDate(document.getElementById('advance-date').value),
+                observations: document.getElementById('order-observations').value,
+                status: document.getElementById('order-status').value
+            };
+            
+            try {
+                if (currentEditId) {
+                    const result = await window.apiService.updateOrder(currentEditId, orderData);
+                    if (!result || !result.success) {
+                        console.error('Error en la respuesta:', result);
+                        throw new Error(result?.message || 'No se pudo actualizar la orden');
+                    }
+                    // Esperar un momento para asegurar que la BD se actualice
+                    setTimeout(async () => {
+                        await loadData();
+                        alert('Orden actualizada con éxito.');
+                    }, 500);
+                } else {
+                    const result = await window.apiService.createOrder(orderData);
+                    if (!result || !result.success) {
+                        throw new Error(result?.message || 'No se pudo crear la orden');
+                    }
+                    // Esperar un momento para asegurar que la BD se actualice
+                    const assignedNumber = result.data?.numeric_id || result.numeric_id || 'nueva';
+                    setTimeout(async () => {
+                        await loadData();
+                        alert(`Orden #${assignedNumber} guardada con éxito. Catálogos actualizados.`);
+                    }, 500);
+                }
+                resetForm();
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al guardar la orden: ' + error.message);
+            } finally {
+                // Re-habilitar el botón en caso de error
+                ui.submitBtn.disabled = false;
+                ui.submitBtn.textContent = originalText;
+            }
+        }
+        
+        // --- FUNCIONES GLOBALES (ACCIONES) ---
+        
+        window.app = {
+            editOrder: async (id) => {
+                try {
+                    const response = await window.apiService.getOrder(id);
+                    const order = response.data;
+                    if (!order || !order.id) {
+                        alert('Error: No se pudo encontrar la orden.');
+                        return;
+                    }
+
+                    currentEditId = order.id; // Usar el ID real de la orden
+                    ui.orderNumericIdInput.value = order.numericId;
+                    ui.orderNumericIdInput.readOnly = true;
+                    ui.orderNumericIdInput.classList.remove('bg-gray-50');
+                    ui.orderNumericIdInput.classList.add('bg-white');
+
+                    // Rellenar datos del cliente
+                    document.getElementById('client-name').value = order.client.name || '';
+                    document.getElementById('client-cel').value = order.client.cel || '';
+                    document.getElementById('client-address').value = order.client.address || '';
+                    document.getElementById('client-rfc').value = order.client.rfc || '';
+                    document.getElementById('client-email').value = order.client.email || '';
+
+                    // Rellenar datos del vehículo
+                    document.getElementById('vehicle-brand').value = order.vehicle.brand || '';
+                    document.getElementById('vehicle-plates').value = order.vehicle.plates || '';
+                    document.getElementById('vehicle-year').value = order.vehicle.year || '';
+                    document.getElementById('vehicle-km').value = order.vehicle.km || '';
+
+                    ui.itemsContainer.innerHTML = '';
+                    order.items.forEach(item => {
+                        const total_price = parseFloat(item.price) || 0;
+                        const qty = parseFloat(item.qty) || 0;
+                        const unit_price = (qty > 0) ? total_price / qty : 0;
+
+                        const itemData = {
+                            qty: qty,
+                            description: item.description,
+                            unitPrice: unit_price,
+                            price: total_price
+                        };
+                        createItemRow(itemData);
+                    });
+
+                    document.getElementById('order-observations').value = order.observations;
+                    document.getElementById('order-status').value = order.status;
+                    document.getElementById('vehicle-gas-level').value = order.vehicle.gasLevel;
+                    ui.ivaCheckbox.checked = order.ivaApplied;
+
+                    if (order.advanceAmount) {
+                        document.getElementById('advance-amount').value = order.advanceAmount;
+                    }
+                    if (order.advanceDate) {
+                        const dateParts = order.advanceDate.split('-');
+                        if (dateParts.length === 3) {
+                            const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                            document.getElementById('advance-date').value = formattedDate;
+                        }
+                    }
+
+                    updateTotals();
+
+                    ui.formModeTitle.textContent = `Editando Orden #${order.numericId}`;
+                    ui.submitBtn.textContent = `Actualizar Orden`;
+                    ui.cancelEditBtn.classList.remove('hidden');
+
+                    const tabButton = document.querySelector('.tab-btn[data-tab="nueva-orden"]');
+                    if (tabButton) tabButton.click();
+                } catch (error) {
+                    alert('Error al cargar la orden para edición: ' + error.message);
+                }
+            },
+            deleteOrder: async (id, numericId) => {
+                if (confirm(`¿Estás seguro de eliminar la orden #${numericId}?`)) {
+                    try {
+                        await window.apiService.deleteOrder(id);
+                        alert(`Orden #${numericId} eliminada.`);
+                        await loadData();
+                    } catch (error) {
+                        alert('Error al eliminar: ' + error.message);
+                    }
+                }
+            },
+            printOrder: (id) => {
+                const order = localData.orders.find(o => o.id == id);
+                if (!order) return alert('Orden no encontrada');
+                localStorage.setItem('ordenParaImprimir', JSON.stringify(order));
+                window.open('impresion.html', '_blank');
+            },
+            invoiceOrder: async (id) => {
+                const order = localData.orders.find(o => o.id == id);
+                if (!order) return alert('Orden no encontrada');
+
+                // Validar que existan correos configurados antes de intentar enviar
+                try {
+                    const res = await window.apiService.getInvoiceRecipients();
+                    const emails = res.data || [];
+                    if (!emails.length) {
+                        alert('No hay correos de facturación configurados. Solicita a un administrador que los configure en la sección de configuración.');
+                        return;
+                    }
+                } catch (e) {
+                    // Si falla la consulta, seguimos y dejamos que el backend valide
+                }
+
+                if (confirm(`¿Solicitar facturación para la orden #${order.numericId}?`)) {
+                    // Optimistic UI update: cambiar estado en memoria y re-renderizar
+                    const previousStatus = order.status;
+                    order.status = 'En Facturación';
+                    renderOrdersTable(ui.orderSearch.value);
+
+                    // Persistir el cambio de estado en el backend
+                    try {
+                        const updateResp = await window.apiService.updateOrder(id, { status: 'En Facturación' });
+                        if (!updateResp || updateResp.success === false) {
+                            throw new Error(updateResp?.message || 'Fallo al actualizar estado');
+                        }
+                    } catch (err) {
+                        // Revertir la UI y notificar
+                        order.status = previousStatus;
+                        renderOrdersTable(ui.orderSearch.value);
+                        return alert('Error al actualizar estado de la orden: ' + err.message);
+                    }
+
+                    // Iniciar el proceso de facturación (envío de correo) como antes
+                    try {
+                        const response = await window.apiService.sendInvoiceEmail(id);
+                        if (response.success) {
+                            alert('Solicitud de facturación enviada exitosamente.');
+                        } else {
+                            alert('Error al enviar solicitud de facturación: ' + response.message);
+                        }
+                    } catch (error) {
+                        alert('Error al enviar solicitud de facturación: ' + error.message);
+                    }
+                }
+            },
+            sendOrder: async (id) => {
+                const order = localData.orders.find(o => o.id == id);
+                if (!order) return alert('Orden no encontrada');
+                if (!order.client.email) return alert('El cliente no tiene correo electrónico registrado.');
+                if (confirm(`¿Enviar la orden #${order.numericId} al correo ${order.client.email}?`)) {
+                    try {
+                        const response = await window.apiService.sendOrderEmail(id);
+                        if (response.success) {
+                            alert('Correo enviado exitosamente.');
+                        } else {
+                            alert('Error al enviar el correo: ' + response.message);
+                        }
+                    } catch (error) {
+                        alert('Error al enviar el correo: ' + error.message);
+                    }
+                }
+            }
+        };
+
+        // --- FUNCION DE EXPORTACIÓN ---
+        function exportToCSV() {
+            if (localData.orders.length === 0) return alert('No hay órdenes para exportar.');
+            let csvContent = "data:text/csv;charset=utf-8,";
+            const headers = "ID Orden,Fecha Creación,Estado,Cliente Nombre,Cliente Teléfono,Cliente Dirección,Cliente RFC,Cliente Email,Vehículo Marca/Modelo,Vehículo Placas,Vehículo Año,Vehículo Kilometraje,Vehículo Nivel Gasolina,Items,Subtotal,IVA,Total,Observaciones\r\n";
+            csvContent += headers;
+
+            localData.orders.forEach(o => {
+                const date = o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-MX') : 'N/A';
+                const items = o.items.map(i => `${i.qty}x ${i.description} ($${i.price})`).join('; ');
+                const row = [
+                    o.numericId, date, o.status, o.client.name, o.client.cel, `"${o.client.address}"`, o.client.rfc, o.client.email,
+                    o.vehicle.brand, o.vehicle.plates, o.vehicle.year, o.vehicle.km, o.vehicle.gasLevel,
+                    `"${items}"`, o.subtotal, o.iva, o.total, `"${o.observations}"`
+                ].join(',');
+                csvContent += row + "\r\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `historial_completo_ordenes_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+      
+            link.click();
+            document.body.removeChild(link);
+        }
+
+    </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const containers = document.querySelectorAll('.draggable-container');
+        containers.forEach(container => {
+            new Sortable(container, {
+                animation: 150,
+                ghostClass: 'bg-blue-100'
+            });
+        });
+    });
+    </script>
+    <script>
+        // --- LÓGICA DE AUTOCOMPLETADO EN TIEMPO REAL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            /**
+             * Función genérica para crear y manejar un menú de autocompletado.
+             * @param {HTMLInputElement} inputElement - El campo de texto al que se adjunta el autocompletado.
+             * @param {Function} searchFn - La función asíncrona que realiza la búsqueda (ej. window.apiService.searchClients).
+             * @param {Function} onSelect - La función que se ejecuta cuando un usuario selecciona un elemento.
+             * @param {Function} resultFormatter - La función que formatea cada resultado en la lista.
+             * @param {string} searchProperty - El nombre de la propiedad sobre la que se debe buscar/filtrar (ej. 'name').
+             */
+            function setupAutocomplete(inputElement, searchFn, onSelect, resultFormatter, searchProperty) {
+                let resultsContainer = null;
+                let debounceTimer;
+
+                inputElement.addEventListener('input', (e) => {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(async () => {
+                        const query = e.target.value;
+                        if (query.length < 1) { // MODIFICADO: Buscar desde el primer caracter
+                            removeResultsContainer();
+                            return;
+                        }
+
+                        try {
+                            // La API puede devolver más resultados de los necesarios, filtramos en el cliente
+                            const results = await searchFn(query);
+                            const lowerCaseQuery = query.toLowerCase();
+                            
+                            // MODIFICADO: Filtrar para que los resultados COMIENCEN con la búsqueda
+                            const filteredResults = (results.data || []).filter(item => 
+                                item[searchProperty].toLowerCase().startsWith(lowerCaseQuery)
+                            );
+
+                            showResults(filteredResults);
+                        } catch (error) {
+                            console.error('Error en autocompletado:', error);
+                            removeResultsContainer();
+                        }
+                    }, 250); // Debounce para no saturar la API con cada tecla
+                });
+
+                function showResults(results) {
+                    removeResultsContainer();
+                    if (results.length === 0) return;
+
+                    resultsContainer = document.createElement('div');
+                    resultsContainer.className = 'autocomplete-results rounded-md shadow-lg';
+                    // Asegurar que el contenedor de resultados se posicione correctamente
+                    inputElement.parentElement.style.position = 'relative'; 
+                    inputElement.parentElement.appendChild(resultsContainer);
+
+                    results.forEach(result => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'autocomplete-item';
+                        itemDiv.innerHTML = resultFormatter(result);
+                        itemDiv.addEventListener('click', () => {
+                            onSelect(result);
+                            removeResultsContainer();
+                        });
+                        resultsContainer.appendChild(itemDiv);
+                    });
+                }
+
+                function removeResultsContainer() {
+                    if (resultsContainer) {
+                        resultsContainer.remove();
+                        resultsContainer = null;
+                    }
+                }
+
+                // Cerrar el menú si se hace clic fuera
+                document.addEventListener('click', (e) => {
+                    if (resultsContainer && !inputElement.contains(e.target) && !resultsContainer.contains(e.target)) {
+                        removeResultsContainer();
+                    }
+                });
+            }
+
+            // 1. Autocompletado para el Nombre del Cliente
+            const clientNameInput = document.getElementById('client-name');
+            setupAutocomplete(clientNameInput, 
+                (query) => window.apiService.searchClients(query),
+                (client) => {
+                    document.getElementById('client-name').value = client.name;
+                    document.getElementById('client-cel').value = client.cel || '';
+                    document.getElementById('client-address').value = client.address || '';
+                    document.getElementById('client-rfc').value = client.rfc || '';
+                    document.getElementById('client-email').value = client.email || '';
+                },
+                (client) => `<span>${client.name}</span><span class="text-sm text-gray-500 ml-2">${client.rfc || ''}</span>`,
+                'name' // Propiedad para buscar: 'name'
+            );
+
+            // 2. Autocompletado para los Conceptos (usando delegación de eventos)
+            const itemsContainer = document.getElementById('items-container');
+            itemsContainer.addEventListener('focusin', (e) => {
+                if (e.target && e.target.classList.contains('item-desc')) {
+                    // Si el autocompletado ya está activo para este input, no hacer nada
+                    if (e.target.hasAttribute('data-autocomplete-active')) return;
+
+                    e.target.setAttribute('data-autocomplete-active', 'true');
+
+                    setupAutocomplete(e.target, 
+                        (query) => window.apiService.searchSupplies(query),
+                        (supply) => {
+                            const row = e.target.closest('.item-row');
+                            if (row) {
+                                e.target.value = supply.description;
+                                const unitPriceInput = row.querySelector('.item-unit-price');
+                                const qtyInput = row.querySelector('.item-qty');
+                                unitPriceInput.value = supply.price;
+                                
+                                // Disparar un evento input para que se recalcule el total de la fila
+                                unitPriceInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        },
+                        (supply) => `<span>${supply.description}</span><span class="text-sm font-bold text-green-600 ml-4">${formatCurrency(supply.price)}</span>`,
+                        'description' // Propiedad para buscar: 'description'
+                    );
+                }
+            });
+        });
+    </script>
+</body>
+</html>

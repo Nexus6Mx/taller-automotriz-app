@@ -1,0 +1,66 @@
+/* Estilos para la vista previa en el navegador */
+body {
+    background-color: #e0e0e0; /* Fondo gris para contraste */
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+#printable-order {
+    background-color: #ffffff; /* Página en blanco */
+    width: 200mm; /* fit within printable area to avoid clipping */
+    min-height: 270mm;
+    padding: 10mm;
+    margin: 5mm auto; /* center page */
+    box-shadow: 0 0 0.5cm rgba(0,0,0,0.5); /* Visual paper effect */
+    box-sizing: border-box;
+    font-size: 9pt;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Clases de utilidad para el formato */
+.border { border: 1px solid black !important; }
+.p-1 { padding: 0.15rem !important; }
+.mt-1 { margin-top: 0.25rem !important; }
+.font-bold { font-weight: 700 !important; }
+.text-right { text-align: right !important; }
+.text-center { text-align: center !important; }
+.w-full { width: 100% !important; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0 !important;
+    page-break-inside: avoid;
+}
+h1, h2 { margin: 0 !important; padding: 0 !important; }
+.align-top { vertical-align: top; }
+.text-xl { font-size: 1.25rem; }
+.text-lg { font-size: 1.125rem; }
+.mt-auto { margin-top: auto; }
+.mb-0 { margin-bottom: 0; }
+.whitespace-pre-wrap { white-space: pre-wrap; }
+
+/* Estilos específicos para cuando se imprime de verdad */
+@media print {
+    body {
+        background-color: #fff;
+        margin: 0;
+    }
+
+    #printable-order {
+        margin: 0 auto;
+        padding: 10mm;
+        box-shadow: none; /* Sin sombra al imprimir */
+        width: 190mm; /* keep within printable width */
+        height: auto;
+    }
+
+    @page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+}
+

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Orden de Servicio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #FFF;
+            color: #000;
+            font-size: 11pt;
+        }
+        .container {
+            width: 190mm; /* match letter printable width allowing margins */
+            max-width: 100%;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 6px;
+            text-align: left;
+            vertical-align: top;
+        }
+        .header-table td, .header-table {
+            border: none;
+        }
+        .header-table .logo {
+            width: 200px;
+        }
+        .header-table .title {
+            text-align: center;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        .order-id-box {
+            border: 2px solid #000;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .info-table th {
+            font-weight: bold;
+            background-color: #EAEAEA;
+            width: 120px;
+        }
+        .items-table th {
+            font-weight: bold;
+            text-align: center;
+            background-color: #EAEAEA;
+        }
+        .items-table td {
+            text-align: right;
+        }
+        .items-table td:nth-child(2) {
+            text-align: left;
+        }
+        .totals-table {
+            width: 250px;
+            float: right;
+        }
+        .totals-table td:first-child {
+            font-weight: bold;
+            text-align: right;
+        }
+         .totals-table td:last-child {
+            text-align: right;
+        }
+        .observations {
+            border: 1px solid #000;
+            padding: 8px;
+            min-height: 80px;
+            margin-bottom: 15px;
+        }
+        .footer {
+            margin-top: 30px;
+            font-weight: bold;
+        }
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <table class="header-table">
+            <tr>
+                <td class="logo"><img id="logo-img" src="assets/images/err.png" alt="Logo" style="width: 100%;"></td>
+                <td class="title">
+                    <p>ERR Automotriz</p>
+                    <p id="doc-title">ORDEN DE SERVICIO</p>
+                </td>
+                <td class="order-id-box">
+                    <span id="doc-id-label">No. de Orden:</span><br>
+                    <span id="numericId"></span>
+                </td>
+            </tr>
+        </table>
+
+        <table class="info-table">
+             <tr>
+                <th>FECHA ENTRADA:</th>
+                <td id="createdAt"></td>
+                <th>FECHA SALIDA:</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th>CLIENTE:</th>
+                <td id="client-name" colspan="3"></td>
+            </tr>
+             <tr>
+                <th>DIRECCIÓN:</th>
+                <td id="client-address" colspan="3"></td>
+            </tr>
+            <tr>
+                <th>R.F.C:</th>
+                <td id="client-rfc"></td>
+                <th>CEL:</th>
+                <td id="client-cel"></td>
+            </tr>
+            <tr>
+                <th>MARCA/MODELO:</th>
+                <td id="vehicle-brand"></td>
+                <th>PLACAS:</th>
+                <td id="vehicle-plates"></td>
+            </tr>
+            <tr>
+                <th>MEDIDOR GAS:</th>
+                <td id="vehicle-gasLevel"></td>
+                <th>KM:</th>
+                <td id="vehicle-km"></td>
+            </tr>
+        </table>
+
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">CANT.</th>
+                    <th>DESCRIPCIÓN</th>
+                    <th style="width: 120px;">IMPORTE</th>
+                </tr>
+            </thead>
+            <tbody id="items-tbody"></tbody>
+        </table>
+
+        <div>
+            <strong>Observaciones:</strong>
+            <div id="observations" class="observations"></div>
+        </div>
+        
+        <table class="totals-table">
+            <tr>
+                <td>SUBTOTAL</td>
+                <td id="subtotal"></td>
+            </tr>
+             <tr>
+                <td>IVA</td>
+                <td id="iva"></td>
+            </tr>
+             <tr>
+                <td>TOTAL</td>
+                <td id="total"></td>
+            </tr>
+        </table>
+        
+        <div style="clear: both;"></div>
+
+        <p class="footer" id="iva-footer-text"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const orderDataString = localStorage.getItem('ordenParaImprimir');
+            if (!orderDataString) {
+                document.body.innerHTML = '<h1>Error: No se encontraron datos de la orden para imprimir.</h1>';
+                return;
+            }
+
+            const order = JSON.parse(orderDataString);
+
+            // --- MEJORA: Nombre de archivo dinámico ---
+            document.title = `orden_${order.numericId}`;
+            // -----------------------------------------
+
+            // Función para rellenar campos
+            const fill = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value || '';
+            };
+            
+            const formatCurrency = (num) => `${parseFloat(num || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+            // Rellenar datos
+            fill('numericId', `${order.numericId}`);
+            const date = new Date(order.createdAt);
+            fill('createdAt', date.toLocaleDateString('es-MX'));
+
+            fill('client-name', order.client.name);
+            fill('client-address', order.client.address);
+            fill('client-rfc', order.client.rfc);
+            fill('client-cel', order.client.cel);
+            
+            fill('vehicle-brand', order.vehicle.brand);
+            fill('vehicle-plates', order.vehicle.plates);
+            fill('vehicle-gasLevel', order.vehicle.gasLevel);
+            fill('vehicle-km', order.vehicle.km);
+
+            fill('observations', order.observations);
+
+            fill('subtotal', formatCurrency(order.subtotal));
+            fill('iva', formatCurrency(order.iva));
+            fill('total', formatCurrency(order.total));
+
+            // --- CORRECCIÓN CLAVE ---
+            // Rellenar la leyenda del IVA de forma condicional
+            const ivaFooter = document.getElementById('iva-footer-text');
+            if (order.ivaApplied) {
+                ivaFooter.textContent = 'LOS PRECIOS INCLUYEN IVA';
+            } else {
+                ivaFooter.textContent = 'LOS PRECIOS NO INCLUYEN IVA';
+            }
+
+            // Rellenar tabla de items
+            const itemsTbody = document.getElementById('items-tbody');
+            let itemsHtml = '';
+            order.items.forEach(item => {
+                // El importe de cada línea ya incluye el IVA si este fue aplicado,
+                // por lo que simplemente mostramos el precio * cantidad.
+                const lineTotal = item.price;
+                itemsHtml += `
+                    <tr>
+                        <td style="text-align: center;">${item.qty}</td>
+                        <td>${item.description}</td>
+                        <td>${formatCurrency(lineTotal)}</td>
+                    </tr>
+                `;
+            });
+            itemsTbody.innerHTML = itemsHtml;
+
+            // Ajustar encabezado según estatus Cotización
+            try {
+                const titleEl = document.getElementById('doc-title');
+                const idLabelEl = document.getElementById('doc-id-label');
+                if (order.status === 'Cotización') {
+                    titleEl.textContent = 'COTIZACIÓN';
+                    idLabelEl.textContent = 'Cotización:';
+                    document.title = `cotizacion_${order.numericId}`;
+                } else {
+                    titleEl.textContent = 'ORDEN DE SERVICIO';
+                    idLabelEl.textContent = 'No. de Orden:';
+                }
+            } catch (e) {}
+
+            // --- MEJORA: Impresión automática ---
+            // Se activa la impresión y se cierra la pestaña después de imprimir.
+            setTimeout(() => {
+                window.print();
+                window.onafterprint = () => window.close();
+            }, 500);
+        });
+    </script>
+</body>
+</html>
+

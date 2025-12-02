@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración - Gestión de Usuarios</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="container mx-auto p-6">
+        <h1 class="text-2xl font-bold mb-4">Configuración</h1>
+        <section class="bg-white p-4 rounded shadow mb-6">
+            <h2 class="text-lg font-semibold mb-2">Gestión de Usuarios</h2>
+            <div id="users-panel">
+                <div class="mb-4 flex justify-between items-center">
+                    <div>
+                        <input id="user-search" class="border rounded p-2" placeholder="Buscar por correo...">
+                    </div>
+                    <button id="new-user-btn" class="bg-green-600 text-white px-4 py-2 rounded">Nuevo Usuario</button>
+                </div>
+                <div class="overflow-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-2 text-left">ID</th>
+                                <th class="p-2 text-left">Email</th>
+                                <th class="p-2 text-left">Rol</th>
+                                <th class="p-2 text-left">Activo</th>
+                                <th class="p-2 text-left">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="invoice-config" class="bg-white p-4 rounded shadow mt-6">
+            <h2 class="text-lg font-semibold mb-2">Correos de solicitud de facturación</h2>
+            <p class="text-sm text-gray-600 mb-3">Ingresa un correo por línea. Estos correos recibirán la solicitud de facturación con el PDF adjunto.</p>
+            <textarea id="invoice-settings-emails" class="w-full rounded-md border-gray-300 focus:border-yellow-500 focus:ring-yellow-500 shadow-sm text-sm p-2" rows="4" placeholder="ejemplo@dominio.com"></textarea>
+            <div class="mt-3 flex items-center gap-3">
+                <button id="invoice-settings-save" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700">Guardar correos</button>
+                <button id="invoice-settings-refresh" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-yellow-700 bg-yellow-100 hover:bg-yellow-200">Recargar</button>
+            </div>
+            <div id="invoice-settings-feedback" class="mt-3 text-sm"></div>
+        </section>
+
+        <section class="bg-white p-4 rounded shadow">
+            <h2 class="text-lg font-semibold mb-2">Logs de Auditoría (últimos 100)</h2>
+            <div class="overflow-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="p-2 text-left">Fecha</th>
+                            <th class="p-2 text-left">Actor</th>
+                            <th class="p-2 text-left">Acción</th>
+                            <th class="p-2 text-left">Detalles</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal para Crear/Editar Usuario -->
+    <div id="user-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div class="px-6 py-4 border-b">
+                <h3 id="user-modal-title" class="text-xl font-semibold">Editar usuario</h3>
+            </div>
+            <form id="user-form" class="px-6 py-4 space-y-4">
+                <input type="hidden" id="user-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Email</label>
+                    <input id="user-email" type="email" class="mt-1 w-full border rounded p-2" required>
+                    <p id="user-email-help" class="text-xs text-gray-500 mt-1">En edición, el email es solo lectura.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Rol</label>
+                    <select id="user-role" class="mt-1 w-full border rounded p-2" required>
+                        <option>Administrador</option>
+                        <option>Operador</option>
+                        <option>Consulta</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input id="user-active" type="checkbox" class="h-4 w-4">
+                    <label for="user-active" class="text-sm text-gray-700">Activo</label>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Contraseña (opcional)</label>
+                    <input id="user-password" type="password" class="mt-1 w-full border rounded p-2" placeholder="Dejar vacío para no cambiar">
+                    <p class="text-xs text-gray-500 mt-1">Mínimo 8 caracteres, con mayúscula, minúscula y número.</p>
+                </div>
+                <div id="user-form-error" class="text-sm text-red-600 hidden"></div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" id="user-cancel" class="px-4 py-2 rounded border">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 rounded bg-blue-600 text-white">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/assets/js/app.js?v=1.7"></script>
+    <script src="/assets/js/config.js"></script>
+    <script>
+        // Invoice recipients management moved here from Historial
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ensure apiService exists even if app.js didn't initialize for any reason
+            if (!window.apiService && typeof APIService === 'function') {
+                window.apiService = new APIService();
+            }
+
+            const textarea = document.getElementById('invoice-settings-emails');
+            const saveBtn = document.getElementById('invoice-settings-save');
+            const refreshBtn = document.getElementById('invoice-settings-refresh');
+            const feedback = document.getElementById('invoice-settings-feedback');
+
+            async function loadEmails(){
+                feedback.textContent = '';
+                try {
+                    // Fallback to direct fetch if apiService is unavailable
+                    let res;
+                    if (window.apiService && typeof window.apiService.getInvoiceRecipients === 'function') {
+                        res = await window.apiService.getInvoiceRecipients();
+                    } else {
+                        const token = localStorage.getItem('authToken');
+                        const r = await fetch('/api/orders/invoice_recipients.php', {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                            }
+                        });
+                        res = await r.json();
+                        if (!r.ok) throw new Error(res && res.message ? res.message : 'Error HTTP ' + r.status);
+                    }
+                    textarea.value = (res.data || []).join('\n');
+                } catch (err) {
+                    feedback.textContent = 'Error al cargar: ' + (err.message || err);
+                    feedback.className = 'mt-3 text-sm text-red-700';
+                }
+            }
+
+            saveBtn.addEventListener('click', async () => {
+                feedback.textContent = '';
+                const lines = textarea.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                for (const em of lines) {
+                    if (!emailRegex.test(em)) {
+                        feedback.textContent = `Correo inválido: ${em}`;
+                        feedback.className = 'mt-3 text-sm text-red-700';
+                        return;
+                    }
+                }
+                if (lines.length === 0) {
+                    feedback.textContent = 'Debe ingresar al menos un correo.';
+                    feedback.className = 'mt-3 text-sm text-red-700';
+                    return;
+                }
+                try {
+                    saveBtn.disabled = true; saveBtn.classList.add('opacity-50');
+                    // Fallback to direct fetch if apiService is unavailable
+                    if (window.apiService && typeof window.apiService.updateInvoiceRecipients === 'function') {
+                        await window.apiService.updateInvoiceRecipients(lines);
+                    } else {
+                        const token = localStorage.getItem('authToken');
+                        const r = await fetch('/api/orders/invoice_recipients.php', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-HTTP-Method-Override': 'PUT',
+                                ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+                            },
+                            body: JSON.stringify({ emails: lines })
+                        });
+                        const res = await r.json();
+                        if (!r.ok) throw new Error(res && res.message ? res.message : 'Error HTTP ' + r.status);
+                    }
+                    feedback.textContent = 'Correos guardados con éxito';
+                    feedback.className = 'mt-3 text-sm text-green-700';
+                    // Refresh list to reflect normalization/order from backend
+                    await loadEmails();
+                } catch (err) {
+                    feedback.textContent = 'Error al guardar: ' + (err.message || err);
+                    feedback.className = 'mt-3 text-sm text-red-700';
+                }
+                finally {
+                    saveBtn.disabled = false; saveBtn.classList.remove('opacity-50');
+                }
+            });
+
+            refreshBtn.addEventListener('click', loadEmails);
+
+            // Load on open
+            loadEmails();
+        });
+    </script>
+</body>
+</html>
