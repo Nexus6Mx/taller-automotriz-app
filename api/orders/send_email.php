@@ -14,8 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit(0);
 }
 
+// Variables SMTP globales
+$SMTP_CONFIG = [];
+
 // Cargar variables de entorno desde .env si existe
 function loadEnvFile($path) {
+    global $SMTP_CONFIG;
     if (file_exists($path)) {
         $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         foreach ($lines as $line) {
@@ -24,14 +28,40 @@ function loadEnvFile($path) {
                 list($key, $value) = explode('=', $line, 2);
                 $key = trim($key);
                 $value = trim($value);
-                if (!getenv($key)) {
-                    putenv("$key=$value");
-                }
+                putenv("$key=$value");
+                $_ENV[$key] = $value;
+                $SMTP_CONFIG[$key] = $value;
             }
         }
+        return true;
     }
+    return false;
 }
-loadEnvFile(__DIR__ . '/../.env');
+
+// Helper para obtener config SMTP
+function getSmtpConfig($key, $default = '') {
+    global $SMTP_CONFIG;
+    if (isset($SMTP_CONFIG[$key]) && $SMTP_CONFIG[$key] !== '') {
+        return $SMTP_CONFIG[$key];
+    }
+    $env = getenv($key);
+    if ($env !== false && $env !== '') {
+        return $env;
+    }
+    if (isset($_ENV[$key]) && $_ENV[$key] !== '') {
+        return $_ENV[$key];
+    }
+    return $default;
+}
+
+// Intentar cargar .env desde múltiples ubicaciones posibles
+$envLoaded = loadEnvFile(__DIR__ . '/../.env');
+if (!$envLoaded) {
+    $envLoaded = loadEnvFile(__DIR__ . '/../../api/.env');
+}
+if (!$envLoaded) {
+    $envLoaded = loadEnvFile($_SERVER['DOCUMENT_ROOT'] . '/api/.env');
+}
 
 require_once '../config/database.php';
 require_once '../utils/cors.php';
@@ -183,22 +213,30 @@ try {
 
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         try {
+            // Obtener configuración SMTP
+            $smtpHost = getSmtpConfig('SMTP_HOST', 'smtp.hostinger.com');
+            $smtpUser = getSmtpConfig('SMTP_USER', '');
+            $smtpPass = getSmtpConfig('SMTP_PASS', '');
+            $smtpPort = (int)getSmtpConfig('SMTP_PORT', '465');
+            $smtpFrom = getSmtpConfig('SMTP_FROM', $smtpUser);
+            $smtpFromName = getSmtpConfig('SMTP_FROM_NAME', 'ERR Automotriz');
+            
+            log_send_email("SMTP Config - Host: $smtpHost, Port: $smtpPort, User: $smtpUser, From: $smtpFrom");
+            
             // Asegurar UTF-8 en PHPMailer
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
             $mail->isSMTP();
             // SMTP settings from environment
-            $mail->Host = getenv('SMTP_HOST') ?: 'smtp.hostinger.com';
+            $mail->Host = $smtpHost;
             $mail->SMTPAuth = true;
-            $mail->Username = getenv('SMTP_USER') ?: '';
-            $mail->Password = getenv('SMTP_PASS') ?: '';
+            $mail->Username = $smtpUser;
+            $mail->Password = $smtpPass;
             $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            $mail->Port = getenv('SMTP_PORT') ? (int)getenv('SMTP_PORT') : 465;
+            $mail->Port = $smtpPort;
 
-            $fromEmail = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
-            $fromName = getenv('SMTP_FROM_NAME') ?: 'ERR Automotriz';
-            if ($fromEmail) {
-                $mail->setFrom($fromEmail, $fromName);
+            if ($smtpFrom) {
+                $mail->setFrom($smtpFrom, $smtpFromName);
             }
             $mail->addAddress($to);
             $mail->addStringAttachment($pdfContent, 'orden_' . $order['numeric_id'] . '.pdf');
