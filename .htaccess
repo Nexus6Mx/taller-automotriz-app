@@ -1,16 +1,29 @@
-# Ensure Authorization header reaches PHP for Bearer tokens
+# Activa el motor de reescritura de URL de Apache
 RewriteEngine On
 
-# Preserve HTTPS redirect logic to parent if needed (do not force here to avoid loops)
-
-# Pass Authorization header into PHP environment
-SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
-RewriteCond %{HTTP:Authorization} ^(.*)
-RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
-
-# CORS preflight should pass through
+# ----------------------------------------------------------------------
+# REGLA CLAVE PARA SOLUCIONAR EL ERROR DE CORS Y REDIRECCIÓN
+# ----------------------------------------------------------------------
+# Esta regla detiene el procesamiento de cualquier petición de tipo OPTIONS.
+# Esto permite que nuestro script 'cors.php' maneje la respuesta
+# en lugar de que el servidor intente redirigirla.
 RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [L]
+# ----------------------------------------------------------------------
 
-# Security: disable directory listings
+# Redirigir todo el tráfico de HTTP a HTTPS para seguridad (DESACTIVADO PARA DESARROLLO LOCAL)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Pasa el encabezado de autorización a PHP para la autenticación
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
+
+# Protege archivos sensibles para que no se puedan acceder desde el navegador
+<FilesMatch "database.php">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Evita que la gente pueda listar el contenido de las carpetas
 Options -Indexes

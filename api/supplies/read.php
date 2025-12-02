@@ -8,11 +8,17 @@ $db = $database->getConnection();
 
 $headers = getallheaders();
 $token = isset($headers['Authorization']) ? str_replace('Bearer ', '', $headers['Authorization']) : '';
-$user_id = verifyToken($db, $token);
-
-if (!$user_id) {
+$user = verifyToken($db, $token);
+if (!$user) {
     http_response_code(401);
     echo json_encode(["message" => "Acceso no autorizado."]);
+    exit();
+}
+$user_id = $user['id'];
+$user_active = isset($user['active']) ? $user['active'] : true;
+if (!$user_active) {
+    http_response_code(403);
+    echo json_encode(["message"=>"Usuario desactivado."]);
     exit();
 }
 

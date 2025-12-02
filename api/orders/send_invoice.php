@@ -246,17 +246,21 @@ try {
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         try{
             $mail->isSMTP();
-            $mail->Host = 'smtp.hostinger.com';
+            $mail->Host = getenv('SMTP_HOST') ?: 'smtp.hostinger.com';
             $mail->SMTPAuth = true;
-            $mail->Username = 'servicio@errautomotriz.online';
-            $mail->Password = '3Errauto!';
+            $mail->Username = getenv('SMTP_USER') ?: '';
+            $mail->Password = getenv('SMTP_PASS') ?: '';
             $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            $mail->Port = 465;
+            $mail->Port = getenv('SMTP_PORT') ? (int)getenv('SMTP_PORT') : 465;
 
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
 
-            $mail->setFrom('servicio@errautomotriz.online','ERR Automotriz');
+            $fromEmail = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
+            $fromName = getenv('SMTP_FROM_NAME') ?: 'ERR Automotriz';
+            if ($fromEmail) {
+                $mail->setFrom($fromEmail, $fromName);
+            }
             foreach($toAddresses as $t) $mail->addAddress($t);
             $mail->Subject = $subject;
             $mail->Body = $bodyText;
@@ -277,7 +281,8 @@ try {
 
     // fallback to mail()
     $boundary = md5(time());
-    $headers = "From: servicio@errautomotriz.online\r\n";
+    $fromHeader = getenv('SMTP_FROM') ?: (getenv('SMTP_USER') ?: '');
+    $headers = $fromHeader ? ("From: $fromHeader\r\n") : '';
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: multipart/mixed; boundary=\"$boundary\"\r\n";
 
