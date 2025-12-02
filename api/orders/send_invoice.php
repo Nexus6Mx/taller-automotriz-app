@@ -302,7 +302,13 @@ try {
             $smtpFrom = getSmtpConfig('SMTP_FROM', $smtpUser);
             $smtpFromName = getSmtpConfig('SMTP_FROM_NAME', 'ERR Automotriz');
             
-            log_send_invoice("SMTP Config - Host: $smtpHost, Port: $smtpPort, User: $smtpUser, From: $smtpFrom");
+            log_send_invoice("SMTP Config - Host: $smtpHost, Port: $smtpPort, User: $smtpUser, PassLen: " . strlen($smtpPass));
+            
+            // Habilitar debug SMTP
+            $mail->SMTPDebug = 3; // Verbose debug output
+            $mail->Debugoutput = function($str, $level) {
+                log_send_invoice("SMTP DEBUG [$level]: " . trim($str));
+            };
             
             $mail->isSMTP();
             $mail->Host = $smtpHost;
@@ -311,6 +317,7 @@ try {
             $mail->Password = $smtpPass;
             $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
             $mail->Port = $smtpPort;
+            $mail->Timeout = 30;
 
             $mail->CharSet = 'UTF-8';
             $mail->Encoding = 'base64';
