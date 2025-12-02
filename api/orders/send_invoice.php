@@ -14,6 +14,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit(0);
 }
 
+// Cargar variables de entorno desde .env si existe
+function loadEnvFile($path) {
+    if (file_exists($path)) {
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos(trim($line), '#') === 0) continue; // Ignorar comentarios
+            if (strpos($line, '=') !== false) {
+                list($key, $value) = explode('=', $line, 2);
+                $key = trim($key);
+                $value = trim($value);
+                if (!getenv($key)) {
+                    putenv("$key=$value");
+                }
+            }
+        }
+    }
+}
+loadEnvFile(__DIR__ . '/../.env');
+
 require_once '../config/database.php';
 require_once '../utils/cors.php';
 require_once '../auth/verify.php';

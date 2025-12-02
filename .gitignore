@@ -1,6 +1,10 @@
 *.sql
 api/config/database.php
 
+# Environment files (contienen credenciales sensibles)
+.env
+api/.env
+
 # Logs
 *.log
 api/orders/debug_update.log
