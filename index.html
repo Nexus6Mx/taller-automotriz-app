@@ -121,7 +121,7 @@
                             </div>
                             <div class="text-right text-xs text-gray-400">&nbsp;</div>
                         </div>
-                        <p class="text-xs text-gray-500 mt-3">Estados: Entregado pendiente de pago, En Facturación, Facturado</p>
+                        <p class="text-xs text-gray-500 mt-3">Estados: Preparacion para entrega, Entregado pendiente de pago, En Facturación, Facturado</p>
                     </div>
 
                     <!-- In-process: show main count and diagnostic count -->
@@ -134,7 +134,7 @@
                             </div>
                             <div class="text-right text-xs text-gray-400">&nbsp;</div>
                         </div>
-                        <p class="text-xs text-gray-500 mt-3">Recibido, Diagnostico, Autorizado en reparación, Preparacion para entrega</p>
+                        <p class="text-xs text-gray-500 mt-3">Recibido, Diagnostico, Autorizado en reparación</p>
                     </div>
 
                     <!-- Income: compact header with current month and percent change, small 3-month mini values and sparkline -->
@@ -1061,12 +1061,12 @@
             // A) KPIs
             // Cuentas por Cobrar: estados que representan una deuda real del cliente
             // Excluye Cotización (no es deuda) y Entregado Pagado (ya pagado)
-            const receivableStates = ['Entregado pendiente de pago', 'En Facturación', 'Facturado'];
+            const receivableStates = ['Preparacion para entrega', 'Entregado pendiente de pago', 'En Facturación', 'Facturado'];
             const accountsReceivable = orders
                 .filter(o => receivableStates.includes(o.status))
                 .reduce((sum, o) => sum + Number(o.total || 0), 0);
 
-            const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación','Preparacion para entrega'];
+            const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación'];
             const inProcessCount = orders.filter(o => inProcessStates.includes(o.status)).length;
 
             // Complementary counts: >30 days for receivable states and Diagnostico count
