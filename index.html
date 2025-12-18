@@ -1062,9 +1062,15 @@
             // Cuentas por Cobrar: estados que representan una deuda real del cliente
             // Excluye Cotización (no es deuda) y Entregado Pagado (ya pagado)
             const receivableStates = ['Preparacion para entrega', 'Entregado pendiente de pago', 'En Facturación', 'Facturado'];
+            // Cuentas por cobrar debe considerar el saldo real: total - anticipo
             const accountsReceivable = orders
                 .filter(o => receivableStates.includes(o.status))
-                .reduce((sum, o) => sum + Number(o.total || 0), 0);
+                .reduce((sum, o) => {
+                    const total = Number(o.total || 0);
+                    const advance = Number(o.advanceAmount ?? o.advance_amount ?? 0);
+                    const netTotal = Math.max(0, total - advance);
+                    return sum + netTotal;
+                }, 0);
 
             const inProcessStates = ['Recibido','Diagnostico','Autorizado en reparación'];
             const inProcessCount = orders.filter(o => inProcessStates.includes(o.status)).length;
